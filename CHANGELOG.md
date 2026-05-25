@@ -81,3 +81,43 @@ Perubahan utama:
 - Tidak mengubah heuristic scoring utama.
 - Tidak mengubah UI besar.
 - Tidak menambahkan database, login, scraping web-wide, atau RAG.
+
+## MVP 3
+
+Tahap lanjutan untuk mendukung pemeriksaan dari screenshot.
+
+Perubahan utama:
+
+- Menambahkan mode input `Teks/Link` dan `Screenshot`.
+- Menambahkan upload screenshot dengan validasi format JPG, PNG, WEBP.
+- Membatasi ukuran screenshot maksimal 5MB.
+- Menambahkan preview gambar sebelum teks dianalisis.
+- Menambahkan OCR client-side menggunakan Tesseract.js.
+- Memastikan gambar diproses di browser dan tidak dikirim ke server.
+- Menampilkan loading state khusus saat OCR berjalan.
+- Menampilkan pesan ramah jika OCR gagal atau teks pada gambar tidak terbaca jelas.
+- Memasukkan hasil OCR ke editor teks agar pengguna bisa mengoreksi sebelum menekan `Cek Sekarang`.
+- Menggunakan hasil OCR sebagai input teks biasa pada pipeline analisis yang sudah ada.
+- Tidak mengubah heuristic analyzer, scraping MVP 2, atau API route utama.
+
+## Heuristic Polish
+
+Tahap perapian aturan deteksi berdasarkan pengujian screenshot pesan mencurigakan.
+
+Perubahan utama:
+
+- Menambahkan deteksi file APK atau ajakan membuka/menginstal aplikasi dari chat.
+- Menambahkan deteksi pola mengatasnamakan instansi atau urusan penting sambil meminta pengguna membuka file/aplikasi.
+- Menambahkan skenario manual testing untuk pesan APK mencurigakan seperti modus surat tilang.
+
+## OCR UX Polish
+
+Tahap perapian pengalaman pengguna pada mode screenshot.
+
+Perubahan utama:
+
+- Membersihkan teks OCR lama saat pengguna memilih screenshot baru.
+- Membersihkan preview dan teks OCR jika validasi file gagal.
+- Membersihkan teks OCR jika proses OCR gagal atau gambar tidak terbaca jelas.
+- Membersihkan preview dan state OCR saat pengguna berpindah dari mode Screenshot ke Teks/Link.
+- Mencegah pesan "teks dari screenshot" muncul untuk teks manual yang bukan hasil OCR.

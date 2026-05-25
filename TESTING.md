@@ -82,7 +82,20 @@ Expected:
 - Terdeteksi klaim bombastis.
 - Terdeteksi tanda seru atau ajakan menyebarkan.
 
-### 5. Pesan Terlalu Panjang
+### 5. Pesan APK Mencurigakan
+
+```text
+Selamat siang pak/ibu, kami dari kepolisian menginformasikan bahwa bapak/ibu melakukan pelanggaran. Silakan buka aplikasi untuk melihat surat tilangnya. Surat Tilang-1.0.apk
+```
+
+Expected:
+
+- Risiko tidak rendah, idealnya mencurigakan.
+- Terdeteksi file APK mencurigakan.
+- Terdeteksi pola mengatasnamakan instansi dengan file aplikasi.
+- Saran tidak membuka, mengunduh, atau menginstal file dari chat.
+
+### 6. Pesan Terlalu Panjang
 
 Buat teks lebih dari 6000 karakter, misalnya salin paragraf berikut berulang kali sampai counter melewati batas:
 
@@ -133,6 +146,10 @@ Teks terlalu panjang. Batasi maksimal 6000 karakter.
   - Expected: rule sumber tidak jelas terdeteksi.
 - [ ] Input berisi `bit.ly`, `tinyurl`, `shortlink`, `s.id`, `cutt.ly`, `rebrand.ly`, atau `t.co`.
   - Expected: rule link mencurigakan terdeteksi.
+- [ ] Input berisi file `.apk`, kata `APK`, atau ajakan membuka/menginstal aplikasi dari chat.
+  - Expected: rule file APK mencurigakan terdeteksi.
+- [ ] Input mengatasnamakan polisi, bank, kurir, pajak, paket, undangan, tagihan, atau tilang sambil meminta membuka aplikasi/file APK.
+  - Expected: rule mengatasnamakan instansi dengan file aplikasi terdeteksi.
 - [ ] Skor risiko tidak pernah lebih dari 100.
 - [ ] Mapping level benar:
   - `0-30`: Rendah

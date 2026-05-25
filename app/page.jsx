@@ -1,17 +1,29 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Disclaimer from "@/components/Disclaimer";
 import EmptyState from "@/components/EmptyState";
 import ErrorState from "@/components/ErrorState";
+import ExtractedTextEditor from "@/components/ExtractedTextEditor";
 import Header from "@/components/Header";
-import InfoTabs from "@/components/InfoTabs";
+import ImagePreview from "@/components/ImagePreview";
+import ImageUploadBox from "@/components/ImageUploadBox";
+import InputModeSelector from "@/components/InputModeSelector";
 import InputBox from "@/components/InputBox";
 import LoadingState from "@/components/LoadingState";
+import OcrLoadingState from "@/components/OcrLoadingState";
 import ResultCard from "@/components/ResultCard";
 
 const MAX_INPUT_LENGTH = 6000;
 const REQUEST_TIMEOUT_MS = 30000;
+const MAX_SCREENSHOT_SIZE = 5 * 1024 * 1024;
+const SUPPORTED_SCREENSHOT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const OCR_FAILURE_MESSAGE =
+  "Maaf, teks pada gambar belum terbaca jelas. Coba gunakan screenshot yang lebih terang atau salin teks secara manual.";
 
 const exampleInputs = [
   {
@@ -64,16 +76,111 @@ function getFriendlyErrorMessage(error) {
 }
 
 export default function HomePage() {
+  const [inputMode, setInputMode] = useState("text");
   const [text, setText] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
+  const [hasOcrText, setHasOcrText] = useState(false);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [imageFileName, setImageFileName] = useState("");
   const resultRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
 
   function handleTextChange(nextText) {
     setText(nextText);
     setError("");
     setResult(null);
+
+    if (inputMode === "text") {
+      setHasOcrText(false);
+    }
+  }
+
+  function handleModeChange(nextMode) {
+    if (inputMode === "screenshot" && nextMode === "text") {
+      clearImagePreview();
+      setIsOcrLoading(false);
+
+      if (hasOcrText) {
+        setText("");
+        setHasOcrText(false);
+      }
+    }
+
+    setInputMode(nextMode);
+    setError("");
+    setResult(null);
+  }
+
+  function clearImagePreview() {
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+
+    setImagePreviewUrl("");
+    setImageFileName("");
+  }
+
+  function clearScreenshotState() {
+    clearImagePreview();
+
+    if (hasOcrText) {
+      setText("");
+      setHasOcrText(false);
+    }
+  }
+
+  async function handleScreenshotSelect(file) {
+    setError("");
+    setResult(null);
+    setText("");
+    setHasOcrText(false);
+    clearImagePreview();
+
+    if (!SUPPORTED_SCREENSHOT_TYPES.has(file.type)) {
+      setError("Format gambar belum didukung. Gunakan JPG, PNG, atau WEBP.");
+      return;
+    }
+
+    if (file.size > MAX_SCREENSHOT_SIZE) {
+      setError("Ukuran gambar terlalu besar. Maksimal 5MB.");
+      return;
+    }
+
+    setImagePreviewUrl(URL.createObjectURL(file));
+    setImageFileName(file.name);
+    setIsOcrLoading(true);
+
+    try {
+      const { extractTextFromImage } = await import("@/lib/extractTextFromImage");
+      const extractedText = await extractTextFromImage(file);
+
+      if (!extractedText || extractedText.length < 8) {
+        setText("");
+        setHasOcrText(false);
+        setError(OCR_FAILURE_MESSAGE);
+        return;
+      }
+
+      setText(extractedText);
+      setHasOcrText(true);
+    } catch (ocrError) {
+      console.error("[ocr]", ocrError);
+      setText("");
+      setHasOcrText(false);
+      setError(OCR_FAILURE_MESSAGE);
+    } finally {
+      setIsOcrLoading(false);
+    }
   }
 
   async function handleSubmit(event) {
@@ -81,7 +188,11 @@ export default function HomePage() {
     const trimmedText = text.trim();
 
     if (!trimmedText) {
-      setError("Silakan tempel berita, chat, atau link terlebih dahulu.");
+      setError(
+        inputMode === "screenshot"
+          ? "Silakan upload screenshot atau isi teks hasil OCR terlebih dahulu."
+          : "Silakan tempel berita, chat, atau link terlebih dahulu."
+      );
       setResult(null);
       return;
     }
@@ -144,20 +255,55 @@ export default function HomePage() {
         <Header />
 
         <section className="rounded-[20px] bg-white p-6 shadow-[0_10px_15px_-3px_rgba(15,23,42,0.05),0_4px_6px_-4px_rgba(15,23,42,0.05)] sm:p-7">
-          <InfoTabs />
+          <InputModeSelector
+            value={inputMode}
+            onChange={handleModeChange}
+            disabled={isLoading || isOcrLoading}
+          />
           <p className="mb-5 text-center text-lg leading-relaxed text-slate-600 sm:text-xl">
             Khawatir pesan WhatsApp, berita, atau link yang Anda terima
-            mencurigakan? Tempel teks atau link di bawah ini untuk memeriksa
-            tanda-tandanya.
+            mencurigakan? Tempel teks, link, atau upload screenshot untuk
+            memeriksa tanda-tandanya.
           </p>
+
+          {inputMode === "screenshot" ? (
+            <div className="mb-5 space-y-4">
+              <ImageUploadBox
+                onFileSelect={handleScreenshotSelect}
+                disabled={isLoading || isOcrLoading}
+              />
+              <ImagePreview
+                imageUrl={imagePreviewUrl}
+                fileName={imageFileName}
+                onClear={clearScreenshotState}
+                disabled={isLoading || isOcrLoading}
+              />
+              {isOcrLoading ? <OcrLoadingState /> : null}
+              <ExtractedTextEditor hasText={hasOcrText && Boolean(text.trim())} />
+            </div>
+          ) : null}
 
           <InputBox
             value={text}
             onChange={handleTextChange}
             onSubmit={handleSubmit}
-            disabled={isLoading}
+            disabled={isLoading || isOcrLoading}
             examples={exampleInputs}
             maxLength={MAX_INPUT_LENGTH}
+            label={
+              inputMode === "screenshot"
+                ? "Edit teks hasil OCR di sini:"
+                : "Tempel pesan, chat, atau link di sini:"
+            }
+            placeholder={
+              inputMode === "screenshot"
+                ? "Teks dari screenshot akan muncul di sini. Anda bisa mengeditnya sebelum dicek..."
+                : "Contoh: tempel chat WhatsApp, judul berita, caption, atau link yang ingin dicek..."
+            }
+            showExamples={inputMode === "text"}
+            disabledLabel={
+              isOcrLoading ? "Tunggu OCR Selesai" : "Sedang Mengecek..."
+            }
           />
         </section>
 

@@ -9,6 +9,14 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
 ## Fitur Utama
 
 - Textarea besar untuk menempel berita, chat, caption, atau link.
+- Mode input `Teks/Link` dan `Screenshot`.
+- Upload screenshot untuk dibaca dengan OCR:
+  - mendukung JPG, PNG, dan WEBP,
+  - maksimal 5MB,
+  - validasi format dan ukuran file,
+  - preview gambar sebelum dianalisis,
+  - OCR berjalan di browser sehingga gambar tidak dikirim ke server.
+- Editor teks hasil OCR agar pengguna bisa memperbaiki hasil bacaan sebelum menekan `Cek Sekarang`.
 - Tombol utama `Cek Sekarang`.
 - Contoh input yang bisa langsung dicoba.
 - Heuristic analyzer untuk mendeteksi:
@@ -67,6 +75,7 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
 - OpenAI SDK dengan endpoint OpenAI-compatible Gemini
 - Axios
 - Cheerio
+- Tesseract.js
 - Tanpa database
 
 ## Struktur Folder
@@ -84,27 +93,29 @@ CekDulu/
     Disclaimer.jsx
     EmptyState.jsx
     ErrorState.jsx
+    ExtractedTextEditor.jsx
     Header.jsx
     Icons.jsx
+    ImagePreview.jsx
+    ImageUploadBox.jsx
     InfoTabs.jsx
     InputBox.jsx
+    InputModeSelector.jsx
     LoadingState.jsx
+    OcrLoadingState.jsx
     ResultCard.jsx
   lib/
     aiClient.js
     analyzeDomain.js
     analyzeInput.js
     detectUrl.js
+    extractTextFromImage.js
     fallbackAnalysis.js
     heuristicAnalyzer.js
     parseAiResponse.js
     promptBuilder.js
     safeUrl.js
     scrapeArticle.js
-  changelogs/
-    changelog-001.md
-    ...
-    changelog-008.md
   .env.example
   .gitignore
   CHANGELOG.md
@@ -119,13 +130,16 @@ CekDulu/
 
 ## Cara Kerja Singkat
 
-1. Pengguna menempel chat, berita, caption, atau link.
-2. Aplikasi memvalidasi input.
-3. Jika input berisi URL, sistem mencoba membaca halaman artikel.
-4. Sistem mengambil metadata artikel dan menganalisis domain awal serta domain akhir.
-5. Heuristic analyzer menghitung skor risiko dari teks dan konteks artikel.
-6. AI membuat ringkasan, klaim utama, tanda yang perlu dicek, dan saran tindakan.
-7. Jika scraping atau AI gagal, aplikasi tetap menampilkan hasil pemeriksaan dasar.
+1. Pengguna memilih mode `Teks/Link` atau `Screenshot`.
+2. Pada mode `Teks/Link`, pengguna menempel chat, berita, caption, atau link.
+3. Pada mode `Screenshot`, pengguna mengunggah gambar dan OCR membaca teks di browser.
+4. Teks hasil OCR masuk ke editor dan bisa diperbaiki pengguna.
+5. Aplikasi memvalidasi input sebelum dikirim ke API.
+6. Jika input berisi URL, sistem mencoba membaca halaman artikel.
+7. Sistem mengambil metadata artikel dan menganalisis domain awal serta domain akhir.
+8. Heuristic analyzer menghitung skor risiko dari teks dan konteks artikel.
+9. AI membuat ringkasan, klaim utama, tanda yang perlu dicek, dan saran tindakan.
+10. Jika OCR, scraping, atau AI gagal, aplikasi menampilkan pesan ramah atau hasil pemeriksaan dasar sesuai kondisi.
 
 ## Cara Instalasi
 
@@ -195,6 +209,9 @@ npm run start
 - Hasil analisis bukan kepastian bahwa berita benar atau hoax.
 - Scraping bisa gagal pada website tertentu, misalnya karena website memblokir bot, memakai struktur HTML yang tidak umum, membutuhkan JavaScript, atau mengalami timeout.
 - Saat ini hanya URL pertama yang terdeteksi dari input yang dianalisis.
+- OCR hanya memproses satu gambar dalam sekali unggah.
+- OCR bisa kurang akurat jika screenshot buram, terlalu kecil, miring, gelap, atau berisi teks yang tidak jelas.
+- File screenshot hanya diproses di browser dan tidak dikirim ke backend.
 - Aplikasi tidak memakai database dan tidak menyimpan riwayat pemeriksaan.
 - Aplikasi belum memakai RAG, vector database, crawling web-wide, atau real-time fact checking.
 - Domain analysis bersifat heuristic awal, bukan penilaian final atas kredibilitas sebuah situs.
