@@ -5,6 +5,10 @@ import { buildAnalysisPrompt } from "@/lib/promptBuilder";
 
 export const runtime = "nodejs";
 
+const DEFAULT_MODEL = "gemini-3-flash-preview";
+const AI_UNAVAILABLE_MESSAGE =
+  "Maaf, analisis AI sedang tidak tersedia. Kami tetap menampilkan hasil pemeriksaan dasar.";
+
 const fallbackAnalysis = {
   summary:
     "Analisis AI belum tersedia, tetapi pola teks tetap sudah diperiksa dengan aturan dasar CekDulu.",
@@ -38,7 +42,12 @@ function extractJson(content) {
   } catch {
     const match = content.match(/\{[\s\S]*\}/);
     if (!match) return null;
-    return JSON.parse(match[0]);
+
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -59,7 +68,19 @@ function normalizeAnalysis(analysis, heuristic) {
 
 export async function POST(request) {
   try {
-    const body = await request.json();
+    let body;
+
+    try {
+      body = await request.json();
+    } catch (error) {
+      console.error("[api/analyze] invalid json body", error);
+
+      return NextResponse.json(
+        { error: "Format permintaan tidak valid." },
+        { status: 400 }
+      );
+    }
+
     const text = typeof body?.text === "string" ? body.text.trim() : "";
 
     if (!text) {
@@ -77,31 +98,50 @@ export async function POST(request) {
     }
 
     const heuristic = analyzeHeuristics(text);
-    const client = createClient();
 
-    const completion = await client.chat.completions.create({
-      model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
-      messages: buildAnalysisPrompt({ text, heuristic }),
-      temperature: 0.2,
-    });
+    try {
+      const client = createClient();
+      const completion = await client.chat.completions.create({
+        model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
+        messages: buildAnalysisPrompt({ text, heuristic }),
+        temperature: 0.2,
+      });
 
-    const content = completion.choices?.[0]?.message?.content;
-    const parsedAnalysis = extractJson(content);
-    const analysis = normalizeAnalysis(parsedAnalysis, heuristic);
+      const content = completion.choices?.[0]?.message?.content;
+      const parsedAnalysis = extractJson(content);
 
-    return NextResponse.json({
-      heuristic,
-      analysis,
-    });
+      if (!parsedAnalysis) {
+        console.error("[api/analyze] AI returned unparsable JSON", content);
+
+        return NextResponse.json({
+          heuristic,
+          analysis: normalizeAnalysis(null, heuristic),
+          aiAvailable: false,
+          message: AI_UNAVAILABLE_MESSAGE,
+        });
+      }
+
+      return NextResponse.json({
+        heuristic,
+        analysis: normalizeAnalysis(parsedAnalysis, heuristic),
+        aiAvailable: true,
+      });
+    } catch (error) {
+      console.error("[api/analyze] AI unavailable", error);
+
+      return NextResponse.json({
+        heuristic,
+        analysis: normalizeAnalysis(null, heuristic),
+        aiAvailable: false,
+        message: AI_UNAVAILABLE_MESSAGE,
+      });
+    }
   } catch (error) {
     console.error("[api/analyze]", error);
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Terjadi kesalahan saat menganalisis pesan.",
+        error: AI_UNAVAILABLE_MESSAGE,
       },
       { status: 500 }
     );

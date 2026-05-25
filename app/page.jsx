@@ -2,11 +2,16 @@
 
 import { useRef, useState } from "react";
 import Disclaimer from "@/components/Disclaimer";
+import EmptyState from "@/components/EmptyState";
 import ErrorState from "@/components/ErrorState";
 import Header from "@/components/Header";
+import InfoTabs from "@/components/InfoTabs";
 import InputBox from "@/components/InputBox";
 import LoadingState from "@/components/LoadingState";
 import ResultCard from "@/components/ResultCard";
+
+const MAX_INPUT_LENGTH = 6000;
+const REQUEST_TIMEOUT_MS = 30000;
 
 const exampleInputs = [
   {
@@ -29,12 +34,26 @@ const exampleInputs = [
   },
 ];
 
+async function readJsonSafely(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 export default function HomePage() {
   const [text, setText] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const resultRef = useRef(null);
+
+  function handleTextChange(nextText) {
+    setText(nextText);
+    setError("");
+    setResult(null);
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -46,9 +65,20 @@ export default function HomePage() {
       return;
     }
 
+    if (trimmedText.length > MAX_INPUT_LENGTH) {
+      setError(`Teks terlalu panjang. Batasi maksimal ${MAX_INPUT_LENGTH} karakter.`);
+      setResult(null);
+      return;
+    }
+
     setIsLoading(true);
     setError("");
     setResult(null);
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
 
     try {
       const response = await fetch("/api/analyze", {
@@ -57,12 +87,17 @@ export default function HomePage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ text: trimmedText }),
+        signal: controller.signal,
       });
 
-      const data = await response.json();
+      const data = await readJsonSafely(response);
 
       if (!response.ok) {
-        throw new Error(data?.error || "Analisis belum berhasil dilakukan.");
+        throw new Error(data?.error || "Terjadi kesalahan saat memeriksa pesan.");
+      }
+
+      if (!data) {
+        throw new Error("Terjadi kesalahan saat memeriksa pesan.");
       }
 
       setResult(data);
@@ -70,12 +105,18 @@ export default function HomePage() {
         resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 120);
     } catch (caughtError) {
+      if (caughtError instanceof Error && caughtError.name === "AbortError") {
+        setError("Koneksi AI sedang lambat. Coba lagi sebentar lagi.");
+        return;
+      }
+
       setError(
         caughtError instanceof Error
           ? caughtError.message
           : "Terjadi kesalahan saat memeriksa pesan."
       );
     } finally {
+      window.clearTimeout(timeoutId);
       setIsLoading(false);
     }
   }
@@ -86,30 +127,31 @@ export default function HomePage() {
         <Header />
 
         <section className="rounded-[20px] bg-white p-6 shadow-[0_10px_15px_-3px_rgba(15,23,42,0.05),0_4px_6px_-4px_rgba(15,23,42,0.05)] sm:p-7">
-          <div className="mb-5 grid grid-cols-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-center text-sm font-bold text-slate-600">
-            <div className="border-r border-slate-200 px-2 py-2.5">Chat</div>
-            <div className="border-r border-slate-200 px-2 py-2.5">Berita</div>
-            <div className="px-2 py-2.5">Link</div>
-          </div>
+          <InfoTabs />
           <p className="mb-5 text-center text-lg leading-relaxed text-slate-600 sm:text-xl">
-            Khawatir pesan di WhatsApp atau berita yang Anda terima itu
-            palsu/hoax? Tempel teks atau link di bawah ini untuk memeriksa
-            cirinya.
+            Khawatir pesan WhatsApp, berita, atau link yang Anda terima
+            mencurigakan? Tempel teks atau link di bawah ini untuk memeriksa
+            tanda-tandanya.
           </p>
 
           <InputBox
             value={text}
-            onChange={setText}
+            onChange={handleTextChange}
             onSubmit={handleSubmit}
             disabled={isLoading}
             examples={exampleInputs}
+            maxLength={MAX_INPUT_LENGTH}
           />
         </section>
 
         {isLoading ? <LoadingState /> : null}
         {error ? <ErrorState message={error} /> : null}
 
-        <div ref={resultRef}>{result ? <ResultCard result={result} /> : null}</div>
+        <div ref={resultRef}>
+          {result ? <ResultCard result={result} /> : null}
+        </div>
+
+        {!isLoading && !error && !result ? <EmptyState /> : null}
 
         <Disclaimer />
       </div>

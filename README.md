@@ -2,11 +2,40 @@
 
 CekDulu adalah aplikasi web satu halaman untuk membantu pengguna awam mengenali tanda-tanda berita, chat WhatsApp, caption media sosial, atau link yang mencurigakan sebelum disebarkan.
 
-Tagline:
-
 > Cek dulu sebelum sebar.
 
-CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi bantuan awal melalui analisis pola teks, skor risiko, dan penjelasan sederhana agar pengguna lebih berhati-hati.
+CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi bantuan awal melalui pemeriksaan pola teks, skor risiko, dan penjelasan sederhana agar pengguna lebih berhati-hati.
+
+## Fitur Utama
+
+- Textarea besar untuk menempel berita, chat, caption, atau link.
+- Tombol utama `Cek Sekarang`.
+- Contoh input yang bisa langsung dicoba.
+- Heuristic analyzer untuk mendeteksi:
+  - ajakan menyebarkan,
+  - bahasa provokatif,
+  - huruf kapital berlebihan,
+  - tanda seru berlebihan,
+  - klaim kesehatan ekstrem,
+  - klaim bombastis,
+  - sumber tidak jelas,
+  - link mencurigakan.
+- Skor risiko `0-100`.
+- Level risiko:
+  - `Rendah`
+  - `Perlu Dicek`
+  - `Mencurigakan`
+- Result card berisi:
+  - status risiko,
+  - skor,
+  - ringkasan,
+  - klaim utama,
+  - tanda yang perlu dicek,
+  - saran tindakan.
+- API route `/api/analyze` untuk membuat penjelasan AI.
+- Fallback hasil dasar jika analisis AI sedang tidak tersedia.
+- Loading state, error state, empty state, character counter, dan disclaimer.
+- Tanpa login dan tanpa database.
 
 ## Tech Stack
 
@@ -17,77 +46,105 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
 - OpenAI SDK dengan endpoint OpenAI-compatible Gemini
 - Tanpa database
 
-## Fitur
-
-- Textarea besar untuk menempel berita, chat, caption, atau link.
-- Tombol utama `Cek Sekarang`.
-- Heuristic analyzer untuk mendeteksi ajakan menyebarkan, bahasa provokatif, kapital berlebihan, tanda seru berlebihan, klaim kesehatan ekstrem, klaim bombastis, sumber tidak jelas, dan link mencurigakan.
-- Risk score `0-100`.
-- Risk level: `Rendah`, `Perlu Dicek`, dan `Mencurigakan`.
-- API route `/api/analyze` untuk menghasilkan penjelasan AI.
-- Result card berisi status risiko, skor, ringkasan, klaim utama, alasan mencurigakan, dan saran tindakan.
-- Loading state, error state, contoh input, dan disclaimer.
-
 ## Struktur Folder
 
 ```text
-app/
-  api/analyze/route.js
-  globals.css
-  layout.js
-  page.jsx
-components/
-  Disclaimer.jsx
-  ErrorState.jsx
-  Header.jsx
-  Icons.jsx
-  InputBox.jsx
-  LoadingState.jsx
-  ResultCard.jsx
-lib/
-  heuristicAnalyzer.js
-  promptBuilder.js
-references/
-  PRD.md
-  index.html
+CekDulu/
+  app/
+    api/
+      analyze/
+        route.js
+    globals.css
+    layout.js
+    page.jsx
+  components/
+    Disclaimer.jsx
+    EmptyState.jsx
+    ErrorState.jsx
+    Header.jsx
+    Icons.jsx
+    InfoTabs.jsx
+    InputBox.jsx
+    LoadingState.jsx
+    ResultCard.jsx
+  lib/
+    heuristicAnalyzer.js
+    promptBuilder.js
+  .env.example
+  .gitignore
+  eslint.config.mjs
+  jsconfig.json
+  next.config.js
+  package.json
+  postcss.config.js
+  tailwind.config.js
+  TESTING.md
 ```
 
-## Setup
+## Cara Instalasi
 
-Salin `.env.example` menjadi `.env.local`, lalu isi:
+Pastikan Node.js dan npm sudah tersedia, lalu jalankan:
+
+```bash
+npm install
+```
+
+## Environment Variable
+
+Salin file `.env.example` menjadi `.env.local`.
 
 ```bash
 GEMINI_API_KEY=isi_api_key_anda
 GEMINI_MODEL=gemini-3-flash-preview
 ```
 
-API key hanya dibaca di server melalui `process.env.GEMINI_API_KEY`.
+Keterangan:
 
-## Menjalankan Lokal
+- `GEMINI_API_KEY`: API key untuk memanggil model AI melalui endpoint OpenAI-compatible Gemini.
+- `GEMINI_MODEL`: nama model yang digunakan oleh API route.
+
+API key hanya dibaca di server melalui `process.env.GEMINI_API_KEY`. Jangan menaruh API key di kode frontend.
+
+## Cara Menjalankan Lokal
+
+Jalankan development server:
 
 ```bash
-npm install
 npm run dev
 ```
 
-Buka `http://127.0.0.1:3000`.
+Buka aplikasi di browser:
 
-## Script
+```text
+http://127.0.0.1:3000
+```
+
+## Cara Build
+
+Jalankan build produksi:
 
 ```bash
-npm run dev
-npm run lint
 npm run build
+```
+
+Untuk menjalankan hasil build:
+
+```bash
 npm run start
 ```
 
-## Keamanan
-
-- Jangan commit `.env`, `.env.local`, atau file env lain yang berisi API key.
-- `.env.example` aman untuk di-push karena hanya berisi nama variabel.
-- Aplikasi tidak memakai database dan tidak menyimpan input pengguna.
-- API key hanya dipakai di server melalui route `/api/analyze`.
-
 ## Disclaimer
 
-Hasil analisis CekDulu bukan kepastian bahwa berita benar atau hoax. Gunakan sebagai bantuan awal dan tetap cek sumber resmi sebelum menyebarkan informasi.
+Hasil analisis CekDulu bukan kepastian bahwa berita benar atau hoax. Gunakan hasilnya sebagai bantuan awal untuk lebih berhati-hati.
+
+Tetap cek sumber resmi sebelum mempercayai atau menyebarkan informasi, terutama untuk topik kesehatan, keuangan, bantuan sosial, keamanan, dan kebijakan publik.
+
+## Future Roadmap
+
+Beberapa pengembangan yang dapat dipertimbangkan di versi berikutnya:
+
+- Peningkatan aturan heuristic agar deteksi pola teks lebih akurat.
+- Tampilan hasil yang lebih edukatif untuk pengguna awam.
+- Pengujian manual dan otomatis yang lebih lengkap.
+- Optimasi aksesibilitas untuk perangkat mobile dan pengguna lansia.
+- Dokumentasi deployment.

@@ -16,7 +16,17 @@ const toneClasses = {
   },
 };
 
-export default function InputBox({ value, onChange, onSubmit, disabled, examples }) {
+export default function InputBox({
+  value,
+  onChange,
+  onSubmit,
+  disabled,
+  examples,
+  maxLength,
+}) {
+  const characterCount = value.length;
+  const isOverLimit = maxLength ? characterCount > maxLength : false;
+
   return (
     <form onSubmit={onSubmit}>
       <div>
@@ -24,7 +34,7 @@ export default function InputBox({ value, onChange, onSubmit, disabled, examples
           htmlFor="message"
           className="mb-2 block text-lg font-bold text-slate-900"
         >
-          Tempel Pesan/Chat/Link Di Sini:
+          Tempel pesan, chat, atau link di sini:
         </label>
         <textarea
           id="message"
@@ -32,9 +42,23 @@ export default function InputBox({ value, onChange, onSubmit, disabled, examples
           onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
           rows={7}
+          aria-describedby="message-counter"
           className="h-[180px] w-full resize-y rounded-xl border-2 border-slate-300 bg-white px-[15px] py-[15px] text-lg leading-relaxed text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-sky-600 focus:ring-4 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-          placeholder="Tempel chat WhatsApp, caption, judul berita, atau link berita di sini..."
+          placeholder="Contoh: tempel chat WhatsApp, judul berita, caption, atau link yang ingin dicek..."
         />
+        {maxLength ? (
+          <div
+            id="message-counter"
+            className={`mt-2 text-right text-sm font-bold ${
+              isOverLimit ? "text-red-700" : "text-slate-500"
+            }`}
+          >
+            {characterCount}/{maxLength} karakter
+            {isOverLimit
+              ? ` - kurangi ${characterCount - maxLength} karakter`
+              : ""}
+          </div>
+        ) : null}
       </div>
 
       <button
@@ -47,7 +71,7 @@ export default function InputBox({ value, onChange, onSubmit, disabled, examples
 
       <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-[15px]">
         <p className="mb-2 text-sm font-bold text-slate-500">
-          Klik contoh di bawah untuk langsung mencoba:
+          Klik contoh di bawah untuk mencoba:
         </p>
         <div className="grid gap-2">
           {examples?.map((example) => {

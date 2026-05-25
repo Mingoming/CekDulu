@@ -29,9 +29,18 @@ const riskStyles = {
   },
 };
 
+const riskDescriptions = {
+  Rendah:
+    "Pesan ini tidak menunjukkan banyak tanda mencurigakan dari pola teks. Tetap cek sumber bila informasinya penting.",
+  "Perlu Dicek":
+    "Ada beberapa tanda yang perlu diperiksa lagi sebelum pesan dipercaya atau dibagikan.",
+  Mencurigakan:
+    "Ada banyak tanda yang perlu diwaspadai. Sebaiknya jangan langsung dibagikan sebelum mengecek sumber resmi.",
+};
+
 function TextBlock({ title, icon, children, strong = false, tone = "" }) {
   return (
-    <section className="mb-[15px]">
+    <section>
       <h2 className="mb-1 flex items-center gap-2 text-[1.1rem] font-bold text-slate-600">
         {icon ? (
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sky-700">
@@ -54,6 +63,7 @@ function TextBlock({ title, icon, children, strong = false, tone = "" }) {
 export default function ResultCard({ result }) {
   const heuristic = result?.heuristic || {};
   const ai = result?.analysis || {};
+  const aiAvailable = result?.aiAvailable !== false;
   const level = heuristic.riskLevel || "Perlu Dicek";
   const styles = riskStyles[level] || riskStyles["Perlu Dicek"];
   const score = heuristic.score ?? 0;
@@ -75,15 +85,24 @@ export default function ResultCard({ result }) {
         <p className={`text-[1.1rem] font-medium ${styles.score}`}>
           Skor Risiko Kecurigaan: {score}/100
         </p>
+        <p className="mx-auto mt-2 max-w-md text-base leading-relaxed text-slate-600">
+          {riskDescriptions[level]}
+        </p>
         <div className="mx-auto mt-3 h-3 max-w-[340px] overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
           <div
             className={`h-full rounded-full transition-all duration-300 ${styles.meter}`}
             style={{ width: `${Math.min(Math.max(score, 0), 100)}%` }}
           />
         </div>
+        {!aiAvailable ? (
+          <p className="mx-auto mt-3 max-w-md rounded-lg bg-sky-50 px-3 py-2 text-sm font-semibold leading-relaxed text-sky-800">
+            Analisis AI sedang tidak tersedia. Hasil di bawah memakai
+            pemeriksaan dasar dari pola teks.
+          </p>
+        ) : null}
       </div>
 
-      <div>
+      <div className="space-y-[15px]">
         <TextBlock title="Klaim Utama Pesan:" icon={<ClipboardIcon />}>
           {ai.mainClaim || "Klaim utama belum dapat diambil dari teks."}
         </TextBlock>
@@ -94,7 +113,7 @@ export default function ResultCard({ result }) {
             "Ringkasan belum tersedia."}
         </TextBlock>
 
-        <TextBlock title="Mengapa Perlu Hati-Hati?" icon={<AlertIcon />}>
+        <TextBlock title="Tanda yang Perlu Dicek:" icon={<AlertIcon />}>
           {suspiciousReasons.length > 0 ? (
             <ul className="list-disc space-y-1 pl-5">
               {suspiciousReasons.map((reason, index) => (
