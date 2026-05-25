@@ -63,6 +63,10 @@ function TextBlock({ title, icon, children, strong = false, tone = "" }) {
 export default function ResultCard({ result }) {
   const heuristic = result?.heuristic || {};
   const ai = result?.analysis || {};
+  const article = result?.article;
+  const domainAnalysis = result?.domainAnalysis;
+  const finalDomainAnalysis = result?.finalDomainAnalysis;
+  const isUrlInput = result?.urlInfo?.isUrl;
   const aiAvailable = result?.aiAvailable !== false;
   const level = heuristic.riskLevel || "Perlu Dicek";
   const styles = riskStyles[level] || riskStyles["Perlu Dicek"];
@@ -103,6 +107,38 @@ export default function ResultCard({ result }) {
       </div>
 
       <div className="space-y-[15px]">
+        {isUrlInput ? (
+          <TextBlock title="Sumber Link:" icon={<SearchIcon />}>
+            <div className="space-y-2">
+              <p>
+                Domain akhir:{" "}
+                <span className="font-bold">
+                  {ai.sourceDomain ||
+                    article?.domain ||
+                    finalDomainAnalysis?.domain ||
+                    domainAnalysis?.domain ||
+                    "-"}
+                </span>
+              </p>
+              <p>
+                HTTPS:{" "}
+                <span className="font-bold">
+                  {(finalDomainAnalysis || domainAnalysis)?.isHttps ? "Ya" : "Tidak"}
+                </span>
+              </p>
+              {article?.scrapeSuccess ? (
+                <p>Isi artikel berhasil dibaca otomatis untuk membantu analisis.</p>
+              ) : (
+                <p>
+                  {article?.errorReason ||
+                    article?.error ||
+                    "Isi artikel belum bisa dibaca otomatis. CekDulu tetap memeriksa link yang ditempel."}
+                </p>
+              )}
+            </div>
+          </TextBlock>
+        ) : null}
+
         <TextBlock title="Klaim Utama Pesan:" icon={<ClipboardIcon />}>
           {ai.mainClaim || "Klaim utama belum dapat diambil dari teks."}
         </TextBlock>

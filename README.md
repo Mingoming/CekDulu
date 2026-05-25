@@ -4,7 +4,7 @@ CekDulu adalah aplikasi web satu halaman untuk membantu pengguna awam mengenali 
 
 > Cek dulu sebelum sebar.
 
-CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi bantuan awal melalui pemeriksaan pola teks, skor risiko, dan penjelasan sederhana agar pengguna lebih berhati-hati.
+CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi bantuan awal melalui pemeriksaan pola teks, analisis link, skor risiko, dan penjelasan sederhana agar pengguna lebih berhati-hati.
 
 ## Fitur Utama
 
@@ -33,6 +33,27 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
   - tanda yang perlu dicek,
   - saran tindakan.
 - API route `/api/analyze` untuk membuat penjelasan AI.
+- URL detection untuk mengenali input yang berisi link.
+- Article scraping untuk membaca halaman artikel dari URL.
+- Metadata extraction untuk mengambil:
+  - title,
+  - meta description,
+  - isi artikel utama,
+  - original domain,
+  - final domain setelah redirect.
+- Domain analysis untuk memeriksa:
+  - shortlink,
+  - pola domain yang perlu dicek,
+  - status HTTPS,
+  - domain awal dan domain akhir.
+- SSRF protection dasar:
+  - hanya mengizinkan `http` dan `https`,
+  - memblokir hostname lokal/internal,
+  - memblokir private IPv4 dan IPv6 range,
+  - validasi DNS sebelum request,
+  - redirect manual maksimal 3 kali,
+  - validasi ulang setiap redirect.
+- Fallback hasil dasar jika scraping artikel gagal.
 - Fallback hasil dasar jika analisis AI sedang tidak tersedia.
 - Loading state, error state, empty state, character counter, dan disclaimer.
 - Tanpa login dan tanpa database.
@@ -44,6 +65,8 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
 - Tailwind CSS
 - Next.js API Route
 - OpenAI SDK dengan endpoint OpenAI-compatible Gemini
+- Axios
+- Cheerio
 - Tanpa database
 
 ## Struktur Folder
@@ -68,10 +91,23 @@ CekDulu/
     LoadingState.jsx
     ResultCard.jsx
   lib/
+    aiClient.js
+    analyzeDomain.js
+    analyzeInput.js
+    detectUrl.js
+    fallbackAnalysis.js
     heuristicAnalyzer.js
+    parseAiResponse.js
     promptBuilder.js
+    safeUrl.js
+    scrapeArticle.js
+  changelogs/
+    changelog-001.md
+    ...
+    changelog-008.md
   .env.example
   .gitignore
+  CHANGELOG.md
   eslint.config.mjs
   jsconfig.json
   next.config.js
@@ -80,6 +116,16 @@ CekDulu/
   tailwind.config.js
   TESTING.md
 ```
+
+## Cara Kerja Singkat
+
+1. Pengguna menempel chat, berita, caption, atau link.
+2. Aplikasi memvalidasi input.
+3. Jika input berisi URL, sistem mencoba membaca halaman artikel.
+4. Sistem mengambil metadata artikel dan menganalisis domain awal serta domain akhir.
+5. Heuristic analyzer menghitung skor risiko dari teks dan konteks artikel.
+6. AI membuat ringkasan, klaim utama, tanda yang perlu dicek, dan saran tindakan.
+7. Jika scraping atau AI gagal, aplikasi tetap menampilkan hasil pemeriksaan dasar.
 
 ## Cara Instalasi
 
@@ -95,15 +141,26 @@ Salin file `.env.example` menjadi `.env.local`.
 
 ```bash
 GEMINI_API_KEY=isi_api_key_anda
+GEMINI_API_KEYS=key_cadangan_1,key_cadangan_2,key_cadangan_3
 GEMINI_MODEL=gemini-3-flash-preview
 ```
 
 Keterangan:
 
-- `GEMINI_API_KEY`: API key untuk memanggil model AI melalui endpoint OpenAI-compatible Gemini.
+- `GEMINI_API_KEY`: API key utama untuk memanggil model AI melalui endpoint OpenAI-compatible Gemini.
+- `GEMINI_API_KEYS`: daftar API key cadangan, dipisahkan dengan koma. Jika key utama terkena limit atau gagal, server akan mencoba key berikutnya.
 - `GEMINI_MODEL`: nama model yang digunakan oleh API route.
 
-API key hanya dibaca di server melalui `process.env.GEMINI_API_KEY`. Jangan menaruh API key di kode frontend.
+Alternatif lain, API key cadangan juga bisa ditulis sebagai variabel bernomor:
+
+```bash
+GEMINI_API_KEY_1=key_pertama
+GEMINI_API_KEY_2=key_kedua
+GEMINI_API_KEY_3=key_ketiga
+GEMINI_API_KEY_4=key_keempat
+```
+
+API key hanya dibaca di server melalui environment variable. Jangan menaruh API key di kode frontend.
 
 ## Cara Menjalankan Lokal
 
@@ -132,6 +189,15 @@ Untuk menjalankan hasil build:
 ```bash
 npm run start
 ```
+
+## Batasan Sistem
+
+- Hasil analisis bukan kepastian bahwa berita benar atau hoax.
+- Scraping bisa gagal pada website tertentu, misalnya karena website memblokir bot, memakai struktur HTML yang tidak umum, membutuhkan JavaScript, atau mengalami timeout.
+- Saat ini hanya URL pertama yang terdeteksi dari input yang dianalisis.
+- Aplikasi tidak memakai database dan tidak menyimpan riwayat pemeriksaan.
+- Aplikasi belum memakai RAG, vector database, crawling web-wide, atau real-time fact checking.
+- Domain analysis bersifat heuristic awal, bukan penilaian final atas kredibilitas sebuah situs.
 
 ## Disclaimer
 

@@ -42,6 +42,27 @@ async function readJsonSafely(response) {
   }
 }
 
+function getFriendlyErrorMessage(error) {
+  if (!(error instanceof Error)) {
+    return "Terjadi kesalahan saat memeriksa pesan. Coba lagi sebentar lagi.";
+  }
+
+  const allowedMessages = [
+    "Teks tidak boleh kosong.",
+    "Format permintaan tidak valid.",
+    "Maaf, analisis AI sedang tidak tersedia. Kami tetap menampilkan hasil pemeriksaan dasar.",
+  ];
+
+  if (
+    allowedMessages.includes(error.message) ||
+    error.message.startsWith("Teks terlalu panjang.")
+  ) {
+    return error.message;
+  }
+
+  return "Terjadi kesalahan saat memeriksa pesan. Coba lagi sebentar lagi.";
+}
+
 export default function HomePage() {
   const [text, setText] = useState("");
   const [result, setResult] = useState(null);
@@ -110,11 +131,7 @@ export default function HomePage() {
         return;
       }
 
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Terjadi kesalahan saat memeriksa pesan."
-      );
+      setError(getFriendlyErrorMessage(caughtError));
     } finally {
       window.clearTimeout(timeoutId);
       setIsLoading(false);
