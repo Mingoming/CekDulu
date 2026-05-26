@@ -38,6 +38,8 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
   - skor,
   - ringkasan,
   - klaim utama,
+  - perbandingan sumber,
+  - sumber pembanding,
   - tanda yang perlu dicek,
   - saran tindakan.
 - API route `/api/analyze` untuk membuat penjelasan AI.
@@ -63,6 +65,12 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
   - validasi ulang setiap redirect.
 - Fallback hasil dasar jika scraping artikel gagal.
 - Fallback hasil dasar jika analisis AI sedang tidak tersedia.
+- Claim extraction sederhana untuk mengambil klaim utama dari input, OCR, atau hasil scraping.
+- Search query generation untuk membuat query pencarian singkat.
+- Web retrieval dengan Gemini Grounding with Google Search untuk mencari maksimal 5 sumber pembanding.
+- Grounding berjalan selektif agar tidak selalu memakai kuota pencarian.
+- Source ranking untuk memilih maksimal 3 sumber terbaik berdasarkan domain resmi, fact-checking, media kredibel, dan HTTPS.
+- Fallback hasil lama jika grounding/retrieval gagal atau sumber pembanding belum tersedia.
 - Loading state, error state, empty state, character counter, dan disclaimer.
 - Tanpa login dan tanpa database.
 
@@ -76,6 +84,7 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
 - Axios
 - Cheerio
 - Tesseract.js
+- Gemini Grounding with Google Search
 - Tanpa database
 
 ## Struktur Folder
@@ -114,6 +123,12 @@ CekDulu/
     heuristicAnalyzer.js
     parseAiResponse.js
     promptBuilder.js
+    retrieval/
+      extractClaim.js
+      generateSearchQuery.js
+      normalizeGroundingSources.js
+      rankSources.js
+      retrieveSources.js
     safeUrl.js
     scrapeArticle.js
   .env.example
@@ -137,9 +152,11 @@ CekDulu/
 5. Aplikasi memvalidasi input sebelum dikirim ke API.
 6. Jika input berisi URL, sistem mencoba membaca halaman artikel.
 7. Sistem mengambil metadata artikel dan menganalisis domain awal serta domain akhir.
-8. Heuristic analyzer menghitung skor risiko dari teks dan konteks artikel.
-9. AI membuat ringkasan, klaim utama, tanda yang perlu dicek, dan saran tindakan.
-10. Jika OCR, scraping, atau AI gagal, aplikasi menampilkan pesan ramah atau hasil pemeriksaan dasar sesuai kondisi.
+8. Sistem mengambil klaim utama dan membuat query pencarian singkat.
+9. Heuristic analyzer menghitung skor risiko dari teks dan konteks artikel.
+10. Jika grounding aktif dan dibutuhkan, server memakai Gemini Grounding with Google Search untuk mencari sumber pembanding dan memilih 3 sumber terbaik.
+11. AI membuat ringkasan, klaim utama, perbandingan sumber, tanda yang perlu dicek, dan saran tindakan.
+12. Jika OCR, scraping, retrieval, atau AI gagal, aplikasi menampilkan pesan ramah atau hasil pemeriksaan dasar sesuai kondisi.
 
 ## Cara Instalasi
 
@@ -157,6 +174,12 @@ Salin file `.env.example` menjadi `.env.local`.
 GEMINI_API_KEY=isi_api_key_anda
 GEMINI_API_KEYS=key_cadangan_1,key_cadangan_2,key_cadangan_3
 GEMINI_MODEL=gemini-3-flash-preview
+GEMINI_GROUNDING_MODEL=gemini-2.5-flash
+ENABLE_GROUNDING=true
+GROUNDING_TIMEOUT_MS=5000
+GROUNDING_MAX_KEY_ATTEMPTS=1
+GROUNDING_MIN_SCORE=35
+GROUNDING_MAX_SCORE=65
 ```
 
 Keterangan:
@@ -164,6 +187,12 @@ Keterangan:
 - `GEMINI_API_KEY`: API key utama untuk memanggil model AI melalui endpoint OpenAI-compatible Gemini.
 - `GEMINI_API_KEYS`: daftar API key cadangan, dipisahkan dengan koma. Jika key utama terkena limit atau gagal, server akan mencoba key berikutnya.
 - `GEMINI_MODEL`: nama model yang digunakan oleh API route.
+- `GEMINI_GROUNDING_MODEL`: nama model Gemini yang digunakan untuk grounding Google Search. Jika kosong, aplikasi memakai `GEMINI_MODEL`.
+- `ENABLE_GROUNDING`: isi `false` untuk mematikan grounding, misalnya saat local development.
+- `GROUNDING_TIMEOUT_MS`: batas waktu grounding dalam milidetik. Default `5000`.
+- `GROUNDING_MAX_KEY_ATTEMPTS`: jumlah maksimal API key yang dicoba untuk grounding. Default `1` agar tidak membuang waktu saat beberapa key masih berada dalam project/quota pool yang sama.
+- `GROUNDING_MIN_SCORE`: skor minimum agar grounding dipanggil. Default `35`.
+- `GROUNDING_MAX_SCORE`: skor maksimum agar grounding dipanggil. Default `65`.
 
 Alternatif lain, API key cadangan juga bisa ditulis sebagai variabel bernomor:
 
@@ -212,8 +241,14 @@ npm run start
 - OCR hanya memproses satu gambar dalam sekali unggah.
 - OCR bisa kurang akurat jika screenshot buram, terlalu kecil, miring, gelap, atau berisi teks yang tidak jelas.
 - File screenshot hanya diproses di browser dan tidak dikirim ke backend.
+- Retrieval hanya mengambil maksimal 5 sumber dan hanya menampilkan maksimal 3 sumber terbaik.
+- Grounding tidak selalu dipanggil. Sistem bisa melewati grounding jika dimatikan lewat env, URL sudah berhasil dibaca lewat scraping, skor heuristic di bawah `GROUNDING_MIN_SCORE`, atau skor heuristic di atas `GROUNDING_MAX_SCORE`.
+- Retrieval bisa gagal jika Gemini Grounding tidak tersedia, API key terkena limit, koneksi lambat, atau sumber yang relevan belum ditemukan.
+- Jika grounding tidak tersedia, UI menampilkan pesan ramah: `Sumber pembanding belum tersedia. Hasil analisis dasar tetap ditampilkan.`
+- Multi-key fallback Gemini hanya efektif menambah kuota jika API key berasal dari project/quota pool yang berbeda.
 - Aplikasi tidak memakai database dan tidak menyimpan riwayat pemeriksaan.
 - Aplikasi belum memakai RAG, vector database, crawling web-wide, atau real-time fact checking.
+- Aplikasi belum memakai embeddings dan belum melakukan full RAG.
 - Domain analysis bersifat heuristic awal, bukan penilaian final atas kredibilitas sebuah situs.
 
 ## Disclaimer

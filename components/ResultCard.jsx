@@ -38,6 +38,13 @@ const riskDescriptions = {
     "Ada banyak tanda yang perlu diwaspadai. Sebaiknya jangan langsung dibagikan sebelum mengecek sumber resmi.",
 };
 
+function shortenSnippet(snippet) {
+  if (!snippet) return "Cuplikan sumber belum tersedia.";
+  if (snippet.length <= 180) return snippet;
+
+  return `${snippet.slice(0, 180).trim()}...`;
+}
+
 function TextBlock({ title, icon, children, strong = false, tone = "" }) {
   return (
     <section>
@@ -66,6 +73,7 @@ export default function ResultCard({ result }) {
   const article = result?.article;
   const domainAnalysis = result?.domainAnalysis;
   const finalDomainAnalysis = result?.finalDomainAnalysis;
+  const retrieval = result?.retrieval;
   const isUrlInput = result?.urlInfo?.isUrl;
   const aiAvailable = result?.aiAvailable !== false;
   const level = heuristic.riskLevel || "Perlu Dicek";
@@ -147,6 +155,47 @@ export default function ResultCard({ result }) {
           {ai.summary ||
             ai.simpleExplanation ||
             "Ringkasan belum tersedia."}
+        </TextBlock>
+
+        <TextBlock title="Perbandingan Sumber:" icon={<SearchIcon />}>
+          {ai.sourceComparison ||
+            "Sumber pembanding belum tersedia. Hasil analisis dasar tetap ditampilkan."}
+        </TextBlock>
+
+        <TextBlock title="Sumber Pembanding:" icon={<ClipboardIcon />}>
+          {retrieval?.sources?.length > 0 ? (
+            <div className="space-y-3">
+              {retrieval.sources.map((source) => (
+                <article
+                  key={source.url}
+                  className="rounded-lg border border-slate-200 bg-white p-3"
+                >
+                  <h3 className="text-base font-bold leading-snug text-slate-900">
+                    {source.title}
+                  </h3>
+                  <p className="mt-1 text-sm font-bold text-sky-700">
+                    {source.domain}
+                  </p>
+                  <p className="mt-2 text-base leading-relaxed text-slate-700">
+                    {shortenSnippet(source.snippet)}
+                  </p>
+                  <a
+                    href={source.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex text-sm font-bold text-sky-700 underline decoration-sky-200 underline-offset-4 hover:text-sky-900"
+                  >
+                    Buka sumber
+                  </a>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p>
+              {retrieval?.message ||
+                "Sumber pembanding belum tersedia. Hasil analisis dasar tetap ditampilkan."}
+            </p>
+          )}
         </TextBlock>
 
         <TextBlock title="Tanda yang Perlu Dicek:" icon={<AlertIcon />}>

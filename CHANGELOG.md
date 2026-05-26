@@ -121,3 +121,49 @@ Perubahan utama:
 - Membersihkan teks OCR jika proses OCR gagal atau gambar tidak terbaca jelas.
 - Membersihkan preview dan state OCR saat pengguna berpindah dari mode Screenshot ke Teks/Link.
 - Mencegah pesan "teks dari screenshot" muncul untuk teks manual yang bukan hasil OCR.
+
+## MVP 4
+
+Tahap lanjutan untuk menambahkan web retrieval dan source comparison.
+
+Perubahan utama:
+
+- Menambahkan claim extraction sederhana dari input teks, hasil OCR, atau hasil scraping.
+- Menambahkan search query generation untuk membuat query pencarian singkat.
+- Menambahkan retrieval sumber pembanding server-side memakai Gemini Grounding with Google Search.
+- Menambahkan normalisasi sumber grounding ke format `title`, `url`, `domain`, dan `snippet`.
+- Membatasi retrieval maksimal 5 sumber.
+- Menambahkan source ranking dan menampilkan maksimal 3 sumber terbaik.
+- Memprioritaskan domain pemerintah, lembaga resmi, website fact-checking, media kredibel, dan HTTPS.
+- Memperbarui prompt AI agar menerima klaim utama dan sumber pembanding.
+- Menambahkan penjelasan perbandingan sumber dengan bahasa netral dan tidak absolut.
+- Menambahkan section `Sumber Pembanding` pada result card.
+- Menambahkan fallback aman jika grounding tidak tersedia, retrieval gagal, atau sumber relevan belum ditemukan.
+- Tetap tanpa database, vector DB, embeddings, full RAG, login, atau penyimpanan riwayat.
+
+## MVP 4 Stability Polish
+
+Tahap perapian stabilitas dan penggunaan token pada retrieval/source comparison.
+
+Perubahan utama:
+
+- Membungkus claim extraction, query generation, retrieval, dan source ranking dengan fallback lokal.
+- Memastikan kegagalan retrieval tidak menghentikan pipeline analisis lama.
+- Menambahkan fallback retrieval kosong dengan pesan ramah untuk pengguna.
+- Membatasi isi artikel yang masuk ke prompt AI agar penggunaan token lebih terkendali.
+- Menambahkan penanda jika artikel dipotong untuk menjaga performa.
+
+## MVP 4 Grounding Optimization
+
+Tahap optimasi penggunaan Gemini Grounding agar lebih hemat kuota dan lebih cepat saat local development.
+
+Perubahan utama:
+
+- Menambahkan `ENABLE_GROUNDING` untuk mematikan grounding saat dibutuhkan.
+- Menambahkan `GROUNDING_TIMEOUT_MS` untuk membatasi waktu tunggu grounding.
+- Menambahkan `GROUNDING_MAX_KEY_ATTEMPTS` untuk membatasi jumlah API key yang dicoba khusus grounding.
+- Menambahkan `GROUNDING_MIN_SCORE` dan `GROUNDING_MAX_SCORE` agar grounding hanya berjalan pada skor abu-abu.
+- Mengubah grounding menjadi selektif berdasarkan konteks URL/scraping dan skor heuristic.
+- Melewati grounding jika URL artikel sudah berhasil dibaca lewat scraping.
+- Melewati grounding jika skor heuristic sudah sangat rendah atau sangat tinggi.
+- Menambahkan reason fallback yang lebih jelas seperti `grounding_disabled`, `grounding_skipped_low_score`, `grounding_skipped_high_score`, `grounding_skipped_url_scraped`, `grounding_rate_limited`, `grounding_timeout`, `grounding_failed`, dan `grounding_success`.
