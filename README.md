@@ -70,6 +70,8 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
 - Web retrieval dengan Gemini Grounding with Google Search untuk mencari maksimal 5 sumber pembanding.
 - Grounding berjalan selektif agar tidak selalu memakai kuota pencarian.
 - Source ranking untuk memilih maksimal 3 sumber terbaik berdasarkan domain resmi, fact-checking, media kredibel, dan HTTPS.
+- Semantic retrieval memory sederhana dengan Gemini Embedding API dan local JSON vector store.
+- Cosine similarity manual untuk mengambil maksimal 3 konteks memory yang mirip.
 - Fallback hasil lama jika grounding/retrieval gagal atau sumber pembanding belum tersedia.
 - Loading state, error state, empty state, character counter, dan disclaimer.
 - Tanpa login dan tanpa database.
@@ -85,6 +87,8 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
 - Cheerio
 - Tesseract.js
 - Gemini Grounding with Google Search
+- Gemini Embedding API
+- Local JSON vector store
 - Tanpa database
 
 ## Struktur Folder
@@ -120,6 +124,12 @@ CekDulu/
     detectUrl.js
     extractTextFromImage.js
     fallbackAnalysis.js
+    embeddings/
+      cosineSimilarity.js
+      generateEmbedding.js
+      saveSourceVectors.js
+      searchVectors.js
+      vectorStore.js
     heuristicAnalyzer.js
     parseAiResponse.js
     promptBuilder.js
@@ -132,6 +142,9 @@ CekDulu/
     safeUrl.js
     scrapeArticle.js
   .env.example
+  data/
+    vectors/
+      sources.json
   .gitignore
   CHANGELOG.md
   eslint.config.mjs
@@ -155,8 +168,10 @@ CekDulu/
 8. Sistem mengambil klaim utama dan membuat query pencarian singkat.
 9. Heuristic analyzer menghitung skor risiko dari teks dan konteks artikel.
 10. Jika grounding aktif dan dibutuhkan, server memakai Gemini Grounding with Google Search untuk mencari sumber pembanding dan memilih 3 sumber terbaik.
-11. AI membuat ringkasan, klaim utama, perbandingan sumber, tanda yang perlu dicek, dan saran tindakan.
-12. Jika OCR, scraping, retrieval, atau AI gagal, aplikasi menampilkan pesan ramah atau hasil pemeriksaan dasar sesuai kondisi.
+11. Sistem mencari konteks semantic memory dari sumber yang pernah tersimpan di local vector store.
+12. Jika grounding sukses, sumber valid disimpan sebagai vector memory untuk request berikutnya.
+13. AI membuat ringkasan, klaim utama, perbandingan sumber, tanda yang perlu dicek, dan saran tindakan.
+14. Jika OCR, scraping, retrieval, embedding, vector memory, atau AI gagal, aplikasi menampilkan pesan ramah atau hasil pemeriksaan dasar sesuai kondisi.
 
 ## Cara Instalasi
 
@@ -175,6 +190,7 @@ GEMINI_API_KEY=isi_api_key_anda
 GEMINI_API_KEYS=key_cadangan_1,key_cadangan_2,key_cadangan_3
 GEMINI_MODEL=gemini-3-flash-preview
 GEMINI_GROUNDING_MODEL=gemini-2.5-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 ENABLE_GROUNDING=true
 GROUNDING_TIMEOUT_MS=5000
 GROUNDING_MAX_KEY_ATTEMPTS=1
@@ -188,6 +204,7 @@ Keterangan:
 - `GEMINI_API_KEYS`: daftar API key cadangan, dipisahkan dengan koma. Jika key utama terkena limit atau gagal, server akan mencoba key berikutnya.
 - `GEMINI_MODEL`: nama model yang digunakan oleh API route.
 - `GEMINI_GROUNDING_MODEL`: nama model Gemini yang digunakan untuk grounding Google Search. Jika kosong, aplikasi memakai `GEMINI_MODEL`.
+- `GEMINI_EMBEDDING_MODEL`: nama model Gemini yang digunakan untuk embedding semantic memory.
 - `ENABLE_GROUNDING`: isi `false` untuk mematikan grounding, misalnya saat local development.
 - `GROUNDING_TIMEOUT_MS`: batas waktu grounding dalam milidetik. Default `5000`.
 - `GROUNDING_MAX_KEY_ATTEMPTS`: jumlah maksimal API key yang dicoba untuk grounding. Default `1` agar tidak membuang waktu saat beberapa key masih berada dalam project/quota pool yang sama.
@@ -242,13 +259,17 @@ npm run start
 - OCR bisa kurang akurat jika screenshot buram, terlalu kecil, miring, gelap, atau berisi teks yang tidak jelas.
 - File screenshot hanya diproses di browser dan tidak dikirim ke backend.
 - Retrieval hanya mengambil maksimal 5 sumber dan hanya menampilkan maksimal 3 sumber terbaik.
+- Semantic memory memakai file lokal `data/vectors/sources.json`, bukan database.
+- Vector memory hanya menyimpan sumber grounding yang valid, bukan gambar OCR atau secret.
+- Similarity search memakai threshold `0.7` dan mengambil maksimal 3 konteks.
 - Grounding tidak selalu dipanggil. Sistem bisa melewati grounding jika dimatikan lewat env, URL sudah berhasil dibaca lewat scraping, skor heuristic di bawah `GROUNDING_MIN_SCORE`, atau skor heuristic di atas `GROUNDING_MAX_SCORE`.
 - Retrieval bisa gagal jika Gemini Grounding tidak tersedia, API key terkena limit, koneksi lambat, atau sumber yang relevan belum ditemukan.
+- Embedding atau vector store bisa gagal; jika terjadi, pipeline lama tetap berjalan tanpa memory retrieval.
 - Jika grounding tidak tersedia, UI menampilkan pesan ramah: `Sumber pembanding belum tersedia. Hasil analisis dasar tetap ditampilkan.`
 - Multi-key fallback Gemini hanya efektif menambah kuota jika API key berasal dari project/quota pool yang berbeda.
 - Aplikasi tidak memakai database dan tidak menyimpan riwayat pemeriksaan.
-- Aplikasi belum memakai RAG, vector database, crawling web-wide, atau real-time fact checking.
-- Aplikasi belum memakai embeddings dan belum melakukan full RAG.
+- Aplikasi memakai Gemini Embedding API dan local JSON vector store sederhana untuk semantic memory.
+- Aplikasi belum memakai full RAG framework, vector database, crawling web-wide, atau real-time fact checking.
 - Domain analysis bersifat heuristic awal, bukan penilaian final atas kredibilitas sebuah situs.
 
 ## Disclaimer

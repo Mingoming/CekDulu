@@ -167,3 +167,32 @@ Perubahan utama:
 - Melewati grounding jika URL artikel sudah berhasil dibaca lewat scraping.
 - Melewati grounding jika skor heuristic sudah sangat rendah atau sangat tinggi.
 - Menambahkan reason fallback yang lebih jelas seperti `grounding_disabled`, `grounding_skipped_low_score`, `grounding_skipped_high_score`, `grounding_skipped_url_scraped`, `grounding_rate_limited`, `grounding_timeout`, `grounding_failed`, dan `grounding_success`.
+
+## MVP 5
+
+Tahap lanjutan untuk menambahkan semantic retrieval memory sederhana.
+
+Perubahan utama:
+
+- Menambahkan embedding generation server-side memakai Gemini Embedding API.
+- Menambahkan local JSON vector store di `data/vectors/sources.json`.
+- Menambahkan safe read/write untuk vector store agar file rusak tidak membuat pipeline crash.
+- Menambahkan cosine similarity manual untuk semantic search.
+- Menambahkan retrieval memory dengan threshold similarity `0.7` dan top K `3`.
+- Menyimpan vector hanya dari sumber grounding yang sukses, valid, cukup panjang, dan belum duplicate.
+- Menambahkan duplicate prevention berdasarkan URL yang sama atau similarity lebih dari `0.95`.
+- Menambahkan konteks memory retrieval ke prompt AI sebagai pembanding tambahan.
+- Menjaga fallback aman jika embedding gagal, vector store rusak, atau semantic retrieval kosong.
+- Tetap tanpa database, vector DB, LangChain, Pinecone, Qdrant, Weaviate, embeddings framework, atau full RAG.
+
+## MVP 5 Efficiency & Privacy Polish
+
+Tahap perapian semantic retrieval memory agar lebih hemat kuota dan lebih minim menyimpan data turunan user.
+
+Perubahan utama:
+
+- Mengecek duplicate URL sebelum memanggil Gemini Embedding API.
+- Melewati proses embedding jika URL sumber sudah pernah tersimpan di local vector store.
+- Mengurangi isi vector memory agar hanya menyimpan konteks sumber publik berupa judul, domain, dan cuplikan sumber.
+- Menghindari penyimpanan raw claim dari input user, chat, atau OCR panjang ke `data/vectors/sources.json`.
+- Merapikan dokumentasi README agar sesuai dengan status MVP 5 yang sudah memakai Gemini Embedding API.

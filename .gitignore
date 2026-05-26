@@ -16,3 +16,4 @@ next-dev.err.log
 .codex/
 .DS_Store
 references/
+data/
