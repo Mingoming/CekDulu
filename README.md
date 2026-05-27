@@ -66,9 +66,9 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
 - Fallback hasil dasar jika scraping artikel gagal.
 - Fallback hasil dasar jika analisis AI sedang tidak tersedia.
 - Claim extraction sederhana untuk mengambil klaim utama dari input, OCR, atau hasil scraping.
-- Search query generation untuk membuat query pencarian singkat.
-- Web retrieval dengan Gemini Grounding with Google Search untuk mencari maksimal 5 sumber pembanding.
-- Grounding berjalan selektif agar tidak selalu memakai kuota pencarian.
+- Search query generation untuk membuat query pencarian singkat, spesifik, dan bebas kata emosional.
+- Web retrieval dengan Gemini Grounding with Google Search untuk mencari maksimal 5 sumber pembanding saat kasus masih ambigu.
+- Grounding berjalan sebagai fallback terakhir agar tidak selalu memakai kuota pencarian.
 - Source ranking untuk memilih maksimal 3 sumber terbaik berdasarkan domain resmi, fact-checking, media kredibel, dan HTTPS.
 - Semantic retrieval memory sederhana dengan Gemini Embedding API dan local JSON vector store.
 - Cosine similarity manual untuk mengambil maksimal 3 konteks memory yang mirip.
@@ -165,13 +165,14 @@ CekDulu/
 5. Aplikasi memvalidasi input sebelum dikirim ke API.
 6. Jika input berisi URL, sistem mencoba membaca halaman artikel.
 7. Sistem mengambil metadata artikel dan menganalisis domain awal serta domain akhir.
-8. Sistem mengambil klaim utama dan membuat query pencarian singkat.
+8. Sistem mengambil klaim utama dan membuat query pencarian singkat berisi 5-12 kata.
 9. Heuristic analyzer menghitung skor risiko dari teks dan konteks artikel.
-10. Jika grounding aktif dan dibutuhkan, server memakai Gemini Grounding with Google Search untuk mencari sumber pembanding dan memilih 3 sumber terbaik.
-11. Sistem mencari konteks semantic memory dari sumber yang pernah tersimpan di local vector store.
-12. Jika grounding sukses, sumber valid disimpan sebagai vector memory untuk request berikutnya.
-13. AI membuat ringkasan, klaim utama, perbandingan sumber, tanda yang perlu dicek, dan saran tindakan.
-14. Jika OCR, scraping, retrieval, embedding, vector memory, atau AI gagal, aplikasi menampilkan pesan ramah atau hasil pemeriksaan dasar sesuai kondisi.
+10. Sistem mencari konteks semantic memory dari sumber yang pernah tersimpan di local vector store.
+11. Jika semantic memory cukup relevan, grounding dilewati dan konteks memory dipakai sebagai pembanding tambahan.
+12. Jika kasus masih ambigu, memory belum cukup relevan, dan grounding aktif, server memakai Gemini Grounding with Google Search untuk mencari sumber pembanding.
+13. Jika grounding sukses, sumber valid disimpan sebagai vector memory untuk request berikutnya.
+14. AI membuat ringkasan, klaim utama, perbandingan sumber, tanda yang perlu dicek, dan saran tindakan.
+15. Jika OCR, scraping, retrieval, embedding, vector memory, grounding, atau AI gagal, aplikasi menampilkan pesan ramah atau hasil pemeriksaan dasar sesuai kondisi.
 
 ## Cara Instalasi
 
@@ -191,6 +192,7 @@ GEMINI_API_KEYS=key_cadangan_1,key_cadangan_2,key_cadangan_3
 GEMINI_MODEL=gemini-3-flash-preview
 GEMINI_GROUNDING_MODEL=gemini-2.5-flash
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+ENABLE_VECTOR_MEMORY=false
 ENABLE_GROUNDING=true
 GROUNDING_TIMEOUT_MS=5000
 GROUNDING_MAX_KEY_ATTEMPTS=1
@@ -205,6 +207,7 @@ Keterangan:
 - `GEMINI_MODEL`: nama model yang digunakan oleh API route.
 - `GEMINI_GROUNDING_MODEL`: nama model Gemini yang digunakan untuk grounding Google Search. Jika kosong, aplikasi memakai `GEMINI_MODEL`.
 - `GEMINI_EMBEDDING_MODEL`: nama model Gemini yang digunakan untuk embedding semantic memory.
+- `ENABLE_VECTOR_MEMORY`: isi `true` untuk mengaktifkan local JSON vector memory. Untuk demo deploy Cloud Run, gunakan `false`.
 - `ENABLE_GROUNDING`: isi `false` untuk mematikan grounding, misalnya saat local development.
 - `GROUNDING_TIMEOUT_MS`: batas waktu grounding dalam milidetik. Default `5000`.
 - `GROUNDING_MAX_KEY_ATTEMPTS`: jumlah maksimal API key yang dicoba untuk grounding. Default `1` agar tidak membuang waktu saat beberapa key masih berada dalam project/quota pool yang sama.
@@ -218,6 +221,8 @@ GEMINI_API_KEY_1=key_pertama
 GEMINI_API_KEY_2=key_kedua
 GEMINI_API_KEY_3=key_ketiga
 GEMINI_API_KEY_4=key_keempat
+# Opsional sampai:
+GEMINI_API_KEY_10=key_kesepuluh
 ```
 
 API key hanya dibaca di server melalui environment variable. Jangan menaruh API key di kode frontend.
@@ -250,6 +255,42 @@ Untuk menjalankan hasil build:
 npm run start
 ```
 
+## Deploy Google Cloud Run
+
+Project ini sudah menyiapkan `Dockerfile` dan `.dockerignore` untuk deploy container ke Google Cloud Run.
+
+Build image lokal:
+
+```bash
+docker build -t cekdulu .
+```
+
+Jalankan container lokal:
+
+```bash
+docker run --env-file .env -e PORT=8080 -p 8080:8080 cekdulu
+```
+
+Contoh alur deploy dengan Google Cloud CLI:
+
+```bash
+gcloud builds submit --tag gcr.io/PROJECT_ID/cekdulu
+gcloud run deploy cekdulu --image gcr.io/PROJECT_ID/cekdulu --region asia-southeast2 --allow-unauthenticated
+```
+
+Untuk demo deploy, set environment variable di Cloud Run atau Secret Manager. Jangan upload file `.env`.
+
+Rekomendasi env untuk demo:
+
+```bash
+ENABLE_VECTOR_MEMORY=false
+ENABLE_GROUNDING=true
+GROUNDING_TIMEOUT_MS=8000
+GROUNDING_MAX_KEY_ATTEMPTS=1
+```
+
+Catatan penting: local JSON vector store di `data/vectors/sources.json` tidak persistent di Cloud Run. Container bisa restart dan beberapa instance tidak berbagi file yang sama. Karena itu, gunakan `ENABLE_VECTOR_MEMORY=false` untuk demo deploy. Jika semantic memory ingin dipakai secara production, gunakan storage eksternal seperti Cloud Storage atau Firestore pada versi berikutnya.
+
 ## Batasan Sistem
 
 - Hasil analisis bukan kepastian bahwa berita benar atau hoax.
@@ -258,11 +299,14 @@ npm run start
 - OCR hanya memproses satu gambar dalam sekali unggah.
 - OCR bisa kurang akurat jika screenshot buram, terlalu kecil, miring, gelap, atau berisi teks yang tidak jelas.
 - File screenshot hanya diproses di browser dan tidak dikirim ke backend.
-- Retrieval hanya mengambil maksimal 5 sumber dan hanya menampilkan maksimal 3 sumber terbaik.
+- Retrieval policy berjalan bertahap: heuristic, scraping URL, semantic memory, lalu Gemini Grounding sebagai fallback terakhir.
+- Retrieval hanya mengambil maksimal 5 sumber dari grounding dan hanya menampilkan maksimal 3 sumber terbaik.
 - Semantic memory memakai file lokal `data/vectors/sources.json`, bukan database.
+- Semantic memory bisa dimatikan dengan `ENABLE_VECTOR_MEMORY=false`, terutama untuk Cloud Run.
 - Vector memory hanya menyimpan sumber grounding yang valid, bukan gambar OCR atau secret.
 - Similarity search memakai threshold `0.7` dan mengambil maksimal 3 konteks.
-- Grounding tidak selalu dipanggil. Sistem bisa melewati grounding jika dimatikan lewat env, URL sudah berhasil dibaca lewat scraping, skor heuristic di bawah `GROUNDING_MIN_SCORE`, atau skor heuristic di atas `GROUNDING_MAX_SCORE`.
+- Grounding tidak selalu dipanggil. Sistem bisa melewati grounding jika dimatikan lewat env, semantic memory cukup relevan, URL berhasil dibaca dan risikonya rendah, skor heuristic di bawah `GROUNDING_MIN_SCORE`, atau skor heuristic di atas `GROUNDING_MAX_SCORE`.
+- Grounding terutama dipakai untuk kasus abu-abu saat heuristic belum cukup jelas dan memory belum punya konteks yang relevan.
 - Retrieval bisa gagal jika Gemini Grounding tidak tersedia, API key terkena limit, koneksi lambat, atau sumber yang relevan belum ditemukan.
 - Embedding atau vector store bisa gagal; jika terjadi, pipeline lama tetap berjalan tanpa memory retrieval.
 - Jika grounding tidak tersedia, UI menampilkan pesan ramah: `Sumber pembanding belum tersedia. Hasil analisis dasar tetap ditampilkan.`
@@ -286,4 +330,4 @@ Beberapa pengembangan yang dapat dipertimbangkan di versi berikutnya:
 - Tampilan hasil yang lebih edukatif untuk pengguna awam.
 - Pengujian manual dan otomatis yang lebih lengkap.
 - Optimasi aksesibilitas untuk perangkat mobile dan pengguna lansia.
-- Dokumentasi deployment.
+- Opsi storage eksternal untuk semantic memory jika masuk tahap production.

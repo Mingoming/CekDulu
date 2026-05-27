@@ -12,8 +12,10 @@ export async function POST(request) {
 
     try {
       body = await request.json();
-    } catch (error) {
-      console.error("[api/analyze] invalid json body", error);
+    } catch {
+      console.error("[api/analyze] invalid json body", {
+        reason: "json_parse_failed",
+      });
 
       return NextResponse.json(
         { error: "Format permintaan tidak valid." },
@@ -41,7 +43,10 @@ export async function POST(request) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[api/analyze]", error);
+    console.error("[api/analyze]", {
+      reason: "unexpected_error",
+      message: error instanceof Error ? error.message : "unknown error",
+    });
 
     return NextResponse.json(
       {

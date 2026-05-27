@@ -36,7 +36,7 @@ const exampleInputs = [
     tone: "yellow",
     label: "Contoh Pesan Perlu Dicek",
     description: "Bantuan sosial dan link pendek",
-    text: "Pemerintah bagi-bagi bantuan sosial tunai 5 juta rupiah untuk semua pengguna WhatsApp. Buruan cek nama Anda di link ini sekarang sebelum ditutup: http://bit.ly/bansos-darurat-2026. Share ke grup lain agar kebagian!",
+    text: "Saya mendapat pesan bahwa ada pendataan bantuan sosial untuk warga. Diminta mengecek nama penerima melalui https://bit.ly/cek-bansos-2026, tetapi pesan ini belum menyertakan sumber resmi yang jelas.",
   },
   {
     tone: "green",
@@ -250,17 +250,17 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen px-[15px] py-5 sm:py-7">
-      <div className="mx-auto flex w-full max-w-[600px] flex-col gap-5 pb-10">
+    <main className="min-h-screen px-4 py-5 sm:py-8">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 pb-10">
         <Header />
 
-        <section className="rounded-[20px] bg-white p-6 shadow-[0_10px_15px_-3px_rgba(15,23,42,0.05),0_4px_6px_-4px_rgba(15,23,42,0.05)] sm:p-7">
+        <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-xl shadow-slate-200/60 sm:p-7">
           <InputModeSelector
             value={inputMode}
             onChange={handleModeChange}
             disabled={isLoading || isOcrLoading}
           />
-          <p className="mb-5 text-center text-lg leading-relaxed text-slate-600 sm:text-xl">
+          <p className="font-source mb-5 text-center text-lg leading-relaxed text-slate-600 sm:text-xl">
             Khawatir pesan WhatsApp, berita, atau link yang Anda terima
             mencurigakan? Tempel teks, link, atau upload screenshot untuk
             memeriksa tanda-tandanya.

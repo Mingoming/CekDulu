@@ -1,4 +1,17 @@
+import { Lexend, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
+
+const lexend = Lexend({
+  subsets: ["latin"],
+  variable: "--font-lexend",
+  weight: ["400", "500", "600", "700", "800", "900"],
+});
+
+const sourceSans = Source_Sans_3({
+  subsets: ["latin"],
+  variable: "--font-source",
+  weight: ["400", "500", "600", "700"],
+});
 
 export const metadata = {
   title: "CekDulu - Cek Hoax & Link Mencurigakan",
@@ -8,8 +21,10 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="id">
-      <body>{children}</body>
+    <html lang="id" className={`${lexend.variable} ${sourceSans.variable}`}>
+      <body className="bg-[#EEF2F7] text-[#0F172A] font-source antialiased selection:bg-blue-200">
+        {children}
+      </body>
     </html>
   );
 }

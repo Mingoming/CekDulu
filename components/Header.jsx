@@ -2,14 +2,14 @@ import { SparkIcon } from "@/components/Icons";
 
 export default function Header() {
   return (
-    <header className="my-6 text-center">
-      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-600 text-white shadow-[0_10px_20px_rgba(2,132,199,0.22)]">
+    <header className="my-7 text-center">
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-[#2563EB] text-white shadow-[0_16px_30px_rgba(37,99,235,0.22)]">
         <SparkIcon className="h-7 w-7" />
       </div>
-      <h1 className="text-[2.5rem] font-black leading-none tracking-normal text-sky-600 sm:text-5xl">
-        CekDulu
+      <h1 className="font-lexend text-4xl font-black leading-none tracking-normal text-[#0F172A] sm:text-5xl">
+        Cek<span className="text-[#2563EB]">Dulu</span>
       </h1>
-      <p className="mt-2 text-xl font-medium italic leading-relaxed text-slate-500">
+      <p className="font-source mt-2 text-lg font-medium italic leading-relaxed text-slate-500 sm:text-xl">
         &quot;Cek dulu sebelum sebar.&quot;
       </p>
     </header>

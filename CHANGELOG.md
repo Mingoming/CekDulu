@@ -196,3 +196,33 @@ Perubahan utama:
 - Mengurangi isi vector memory agar hanya menyimpan konteks sumber publik berupa judul, domain, dan cuplikan sumber.
 - Menghindari penyimpanan raw claim dari input user, chat, atau OCR panjang ke `data/vectors/sources.json`.
 - Merapikan dokumentasi README agar sesuai dengan status MVP 5 yang sudah memakai Gemini Embedding API.
+
+## Cloud Run Demo Preparation
+
+Tahap persiapan deploy demo ke Google Cloud Run.
+
+Perubahan utama:
+
+- Menambahkan `ENABLE_VECTOR_MEMORY` agar local JSON vector memory bisa dimatikan di environment production/demo.
+- Menjadikan default `ENABLE_VECTOR_MEMORY=false` di `.env.example`.
+- Melewati semantic memory search dan write saat vector memory dimatikan, tanpa mengganggu pipeline analisis utama.
+- Menambahkan `Dockerfile` untuk menjalankan Next.js production server di Cloud Run.
+- Menambahkan `.dockerignore` agar file lokal, secret, build output, reference, dan data runtime tidak masuk konteks Docker.
+- Merapikan logging agar tidak mencatat URL lengkap atau raw AI response panjang.
+- Menambahkan dokumentasi deploy Google Cloud Run dan catatan bahwa local JSON vector store tidak persistent di Cloud Run.
+
+## MVP 5 Retrieval Policy Optimization
+
+Tahap optimasi retrieval agar lebih cepat, hemat kuota, dan stabil untuk demo Google Cloud.
+
+Perubahan utama:
+
+- Mengubah urutan retrieval menjadi heuristic, scraping URL, semantic vector memory, lalu Gemini Grounding sebagai fallback terakhir.
+- Membuat query grounding lebih ringkas dengan panjang 5-12 kata.
+- Menghapus kata emosional seperti `sebarkan`, `viralkan`, `buruan`, `darurat`, `hati-hati`, `share`, dan `forward` dari query pencarian.
+- Menambahkan keyword konteks untuk kesehatan, bansos/pemerintah, penipuan APK, dan keuangan.
+- Memendekkan prompt Gemini Grounding agar fokus mencari sumber web terpercaya.
+- Menurunkan `maxOutputTokens` grounding menjadi `300`.
+- Melewati grounding jika semantic memory memiliki konteks relevan dengan similarity minimal `0.75`.
+- Menambahkan reason `grounding_skipped_memory_hit` dan `grounding_skipped_url_scraped_low_risk`.
+- Mempertahankan fallback aman saat grounding timeout, rate limited, gagal, atau tidak mengembalikan sumber.
