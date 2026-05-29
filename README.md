@@ -190,6 +190,9 @@ Salin file `.env.example` menjadi `.env.local`.
 GEMINI_API_KEY=isi_api_key_anda
 GEMINI_API_KEYS=key_cadangan_1,key_cadangan_2,key_cadangan_3
 GEMINI_MODEL=gemini-3-flash-preview
+AI_TIMEOUT_MS=12000
+AI_MAX_KEY_ATTEMPTS=1
+AI_MAX_OUTPUT_TOKENS=700
 GEMINI_GROUNDING_MODEL=gemini-2.5-flash
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 ENABLE_VECTOR_MEMORY=false
@@ -203,8 +206,11 @@ GROUNDING_MAX_SCORE=65
 Keterangan:
 
 - `GEMINI_API_KEY`: API key utama untuk memanggil model AI melalui endpoint OpenAI-compatible Gemini.
-- `GEMINI_API_KEYS`: daftar API key cadangan, dipisahkan dengan koma. Jika key utama terkena limit atau gagal, server akan mencoba key berikutnya.
+- `GEMINI_API_KEYS`: daftar API key tambahan, dipisahkan dengan koma. Server memakai round-robin agar request tersebar ke semua key yang tersedia.
 - `GEMINI_MODEL`: nama model yang digunakan oleh API route.
+- `AI_TIMEOUT_MS`: batas waktu panggilan AI utama dalam milidetik. Default `12000` agar response fallback tetap sempat dikirim sebelum timeout client.
+- `AI_MAX_KEY_ATTEMPTS`: jumlah maksimal API key yang dicoba dalam satu request AI. Default `1`; semua key tetap dipakai bergantian lewat round-robin antar-request. Gunakan `2` jika ingin satu key cadangan dicoba saat request gagal.
+- `AI_MAX_OUTPUT_TOKENS`: batas output AI utama. Default `700` untuk menjaga respons tetap ringkas dan cepat.
 - `GEMINI_GROUNDING_MODEL`: nama model Gemini yang digunakan untuk grounding Google Search. Jika kosong, aplikasi memakai `GEMINI_MODEL`.
 - `GEMINI_EMBEDDING_MODEL`: nama model Gemini yang digunakan untuk embedding semantic memory.
 - `ENABLE_VECTOR_MEMORY`: isi `true` untuk mengaktifkan local JSON vector memory. Untuk demo deploy Cloud Run, gunakan `false`.
@@ -285,6 +291,9 @@ Rekomendasi env untuk demo:
 ```bash
 ENABLE_VECTOR_MEMORY=false
 ENABLE_GROUNDING=true
+AI_TIMEOUT_MS=12000
+AI_MAX_KEY_ATTEMPTS=1
+AI_MAX_OUTPUT_TOKENS=700
 GROUNDING_TIMEOUT_MS=8000
 GROUNDING_MAX_KEY_ATTEMPTS=1
 ```
