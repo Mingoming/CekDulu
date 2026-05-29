@@ -193,7 +193,7 @@ GEMINI_MODEL=gemini-3-flash-preview
 AI_TIMEOUT_MS=7000
 AI_REQUEST_BUDGET_MS=22000
 AI_MAX_KEY_ATTEMPTS=3
-AI_MAX_OUTPUT_TOKENS=700
+AI_MAX_OUTPUT_TOKENS=1200
 AI_KEY_COOLDOWN_MS=120000
 AI_INVALID_KEY_COOLDOWN_MS=900000
 GEMINI_GROUNDING_MODEL=gemini-2.5-flash
@@ -214,7 +214,7 @@ Keterangan:
 - `AI_TIMEOUT_MS`: batas waktu per percobaan AI utama dalam milidetik. Default `7000`.
 - `AI_REQUEST_BUDGET_MS`: batas total waktu AI utama dalam satu request. Default `22000` agar beberapa key masih bisa dicoba tanpa menunggu terlalu lama.
 - `AI_MAX_KEY_ATTEMPTS`: jumlah maksimal API key yang dicoba dalam satu request AI. Default `3`; semua key tetap dipakai bergantian lewat round-robin antar-request.
-- `AI_MAX_OUTPUT_TOKENS`: batas output AI utama. Default `700` untuk menjaga respons tetap ringkas dan cepat.
+- `AI_MAX_OUTPUT_TOKENS`: batas output AI utama. Default `1200` agar JSON analisis lengkap tidak mudah terpotong.
 - `AI_KEY_COOLDOWN_MS`: durasi istirahat sementara untuk key yang gagal karena timeout, rate limit, atau error server. Default `120000`.
 - `AI_INVALID_KEY_COOLDOWN_MS`: durasi istirahat untuk key yang gagal karena auth/permission. Default `900000`.
 - `GEMINI_GROUNDING_MODEL`: nama model Gemini yang digunakan untuk grounding Google Search. Jika kosong, aplikasi memakai `GEMINI_MODEL`.
@@ -300,7 +300,7 @@ ENABLE_GROUNDING=true
 AI_TIMEOUT_MS=7000
 AI_REQUEST_BUDGET_MS=22000
 AI_MAX_KEY_ATTEMPTS=3
-AI_MAX_OUTPUT_TOKENS=700
+AI_MAX_OUTPUT_TOKENS=1200
 AI_KEY_COOLDOWN_MS=120000
 AI_INVALID_KEY_COOLDOWN_MS=900000
 GROUNDING_TIMEOUT_MS=8000
