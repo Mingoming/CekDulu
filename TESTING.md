@@ -15,10 +15,16 @@ npm install
 ```bash
 GEMINI_API_KEY=isi_api_key_anda
 GEMINI_MODEL=gemini-3-flash-preview
-AI_TIMEOUT_MS=9000
-AI_REQUEST_BUDGET_MS=14000
-AI_MAX_KEY_ATTEMPTS=2
+AI_MODEL=gemini-3-flash-preview
+AI_TIMEOUT_MS=12000
+AI_REQUEST_BUDGET_MS=13000
+AI_MAX_KEY_ATTEMPTS=1
 AI_MAX_OUTPUT_TOKENS=900
+AI_QUICK_FALLBACK_ENABLED=true
+AI_QUICK_MODEL=gemma-4-26b-a4b-it
+AI_QUICK_TIMEOUT_MS=8000
+AI_QUICK_MAX_OUTPUT_TOKENS=500
+ENABLE_GROUNDING=false
 ```
 
 3. Jalankan aplikasi:
@@ -160,7 +166,7 @@ Teks terlalu panjang. Batasi maksimal 6000 karakter.
   - `31-60`: Perlu Dicek
   - `61-100`: Mencurigakan
 
-## Checklist AI Fallback
+## Checklist AI Baseline dan Fallback
 
 Untuk menguji fallback, jalankan aplikasi tanpa `GEMINI_API_KEY` atau isi API key tidak valid.
 
@@ -176,6 +182,49 @@ Untuk menguji fallback, jalankan aplikasi tanpa `GEMINI_API_KEY` atau isi API ke
 ```text
 Maaf, analisis AI sedang tidak tersedia. Kami tetap menampilkan hasil pemeriksaan dasar.
 ```
+
+Untuk menguji ADR-001, gunakan API key valid dan konfigurasi baseline:
+
+```bash
+AI_QUICK_FALLBACK_ENABLED=true
+AI_QUICK_MODEL=gemma-4-26b-a4b-it
+AI_QUICK_TIMEOUT_MS=8000
+AI_QUICK_MAX_OUTPUT_TOKENS=500
+AI_MODEL=gemini-3-flash-preview
+GEMINI_MODEL=gemini-3-flash-preview
+AI_TIMEOUT_MS=12000
+AI_REQUEST_BUDGET_MS=13000
+AI_MAX_KEY_ATTEMPTS=1
+ENABLE_GROUNDING=false
+```
+
+- [ ] Submit input normal.
+- [ ] Log server menampilkan `quick_ai_started` sebelum `primary_ai_started`.
+- [ ] Jika Quick AI berhasil, log menampilkan `quick_ai_succeeded`.
+- [ ] Jika Primary AI berhasil, response API memiliki `aiMode: "primary"` dan log menampilkan `primary_result_used`.
+- [ ] Jika Primary AI gagal tetapi Quick AI berhasil, response API memiliki `aiMode: "quick_fallback"` dan log menampilkan `quick_result_used`.
+- [ ] Jika Quick AI mengembalikan `{}`, `null`, string kosong, atau konten kurang dari 20 karakter, log menampilkan `quick_ai_unusable`.
+- [ ] Jika Quick AI mengembalikan output yang diawali `<thought>...</thought>` lalu JSON valid, log menampilkan `quick_ai_cleanup_applied` dan parser mengambil JSON tersebut.
+- [ ] Jika Quick AI mengembalikan output yang diawali `<thought>` tanpa closing tag tetapi ada JSON valid setelahnya, parser membuang bagian thought dan mengambil JSON pertama yang valid.
+- [ ] Jika Quick AI mengembalikan `<thought>` tanpa JSON valid, log menampilkan `quick_ai_unusable` dan sistem lanjut ke Primary AI atau template sesuai hasil Primary.
+- [ ] Jika Quick AI dan Primary AI sama-sama gagal, response API memiliki `aiMode: "template_fallback"` dan log menampilkan `template_fallback_used`.
+- [ ] Penjelasan tetap singkat, netral, dan tidak mengatakan `pasti hoax`.
+
+Untuk mensimulasikan Primary gagal setelah Quick, set sementara:
+
+```bash
+AI_QUICK_FALLBACK_ENABLED=true
+AI_QUICK_MODEL=gemma-4-26b-a4b-it
+AI_QUICK_TIMEOUT_MS=8000
+AI_QUICK_MAX_OUTPUT_TOKENS=500
+AI_TIMEOUT_MS=1
+AI_REQUEST_BUDGET_MS=3000
+AI_MAX_KEY_ATTEMPTS=1
+```
+
+- [ ] Submit input normal.
+- [ ] Log server menampilkan `quick_ai_started`, `quick_ai_succeeded`, `primary_ai_failed`, lalu `quick_result_used`.
+- [ ] Response tetap status 200 dan result card tetap tampil.
 
 ## Checklist Error Handling API
 

@@ -10,12 +10,14 @@ import ImagePreview from "@/components/ImagePreview";
 import ImageUploadBox from "@/components/ImageUploadBox";
 import InputModeSelector from "@/components/InputModeSelector";
 import InputBox from "@/components/InputBox";
-import LoadingState from "@/components/LoadingState";
 import OcrLoadingState from "@/components/OcrLoadingState";
+import ProgressiveLoading from "@/components/ProgressiveLoading";
 import ResultCard from "@/components/ResultCard";
 
 const MAX_INPUT_LENGTH = 6000;
 const REQUEST_TIMEOUT_MS = 45000;
+const RESULT_BACKUP_POLL_MS = 2000;
+const REPORT_GENERATION_NOTICE_MS = 5000;
 const MAX_SCREENSHOT_SIZE = 5 * 1024 * 1024;
 const SUPPORTED_SCREENSHOT_TYPES = new Set([
   "image/jpeg",
@@ -54,6 +56,23 @@ async function readJsonSafely(response) {
   }
 }
 
+async function fetchAnalysisResult(jobId, signal) {
+  const fetchOptions = signal ? { signal } : undefined;
+  const resultResponse = await fetch(
+    `/api/analyze/result?id=${encodeURIComponent(jobId)}`,
+    fetchOptions
+  );
+  const resultPayload = await readJsonSafely(resultResponse);
+
+  if (!resultResponse.ok) {
+    throw new Error(
+      resultPayload?.error || "Terjadi kesalahan saat memeriksa pesan."
+    );
+  }
+
+  return resultPayload;
+}
+
 function getFriendlyErrorMessage(error) {
   if (!(error instanceof Error)) {
     return "Terjadi kesalahan saat memeriksa pesan. Coba lagi sebentar lagi.";
@@ -82,10 +101,22 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isOcrLoading, setIsOcrLoading] = useState(false);
+  const [progressState, setProgressState] = useState(null);
   const [hasOcrText, setHasOcrText] = useState(false);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [imageFileName, setImageFileName] = useState("");
   const resultRef = useRef(null);
+  const eventSourceRef = useRef(null);
+  const reportNoticeTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
+      if (reportNoticeTimeoutRef.current) {
+        window.clearTimeout(reportNoticeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -99,6 +130,7 @@ export default function HomePage() {
     setText(nextText);
     setError("");
     setResult(null);
+    setProgressState(null);
 
     if (inputMode === "text") {
       setHasOcrText(false);
@@ -119,6 +151,7 @@ export default function HomePage() {
     setInputMode(nextMode);
     setError("");
     setResult(null);
+    setProgressState(null);
   }
 
   function clearImagePreview() {
@@ -142,6 +175,7 @@ export default function HomePage() {
   async function handleScreenshotSelect(file) {
     setError("");
     setResult(null);
+    setProgressState(null);
     setText("");
     setHasOcrText(false);
     clearImagePreview();
@@ -185,6 +219,12 @@ export default function HomePage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    eventSourceRef.current?.close();
+    if (reportNoticeTimeoutRef.current) {
+      window.clearTimeout(reportNoticeTimeoutRef.current);
+      reportNoticeTimeoutRef.current = null;
+    }
+
     const trimmedText = text.trim();
 
     if (!trimmedText) {
@@ -206,14 +246,27 @@ export default function HomePage() {
     setIsLoading(true);
     setError("");
     setResult(null);
+    setProgressState({
+      stage: "input_processing",
+      progress: 5,
+      message: "Menyiapkan analisis",
+      status: "running",
+    });
 
     const controller = new AbortController();
+    let eventSource = null;
+    let activeJobId = "";
+    let clientTimedOut = false;
+    let abortResultPromise = null;
     const timeoutId = window.setTimeout(() => {
+      clientTimedOut = true;
+      eventSource?.close();
       controller.abort();
+      abortResultPromise?.();
     }, REQUEST_TIMEOUT_MS);
 
     try {
-      const response = await fetch("/api/analyze", {
+      const startResponse = await fetch("/api/analyze/start", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -222,22 +275,213 @@ export default function HomePage() {
         signal: controller.signal,
       });
 
-      const data = await readJsonSafely(response);
+      const startData = await readJsonSafely(startResponse);
 
-      if (!response.ok) {
-        throw new Error(data?.error || "Terjadi kesalahan saat memeriksa pesan.");
+      if (!startResponse.ok) {
+        throw new Error(
+          startData?.error || "Terjadi kesalahan saat memeriksa pesan."
+        );
       }
 
-      if (!data) {
+      if (!startData?.jobId) {
         throw new Error("Terjadi kesalahan saat memeriksa pesan.");
       }
 
-      setResult(data);
+      const jobId = startData.jobId;
+      activeJobId = jobId;
+      const encodedJobId = encodeURIComponent(jobId);
+      eventSource = new EventSource(`/api/analyze/stream?id=${encodedJobId}`);
+      eventSourceRef.current = eventSource;
+
+      const resultPayload = await new Promise((resolve, reject) => {
+        let backupPollId = null;
+        let settled = false;
+        let inFlight = false;
+        let sseAvailable = true;
+
+        function clearReportNotice() {
+          if (reportNoticeTimeoutRef.current) {
+            window.clearTimeout(reportNoticeTimeoutRef.current);
+            reportNoticeTimeoutRef.current = null;
+          }
+        }
+
+        function cleanup() {
+          settled = true;
+          abortResultPromise = null;
+          eventSource?.close();
+          clearReportNotice();
+
+          if (backupPollId) {
+            window.clearInterval(backupPollId);
+          }
+        }
+
+        abortResultPromise = () => {
+          cleanup();
+          reject(new DOMException("Request timeout", "AbortError"));
+        };
+
+        async function resolveFromResult({ source } = {}) {
+          if (settled || inFlight) return;
+
+          inFlight = true;
+
+          try {
+            const payload = await fetchAnalysisResult(jobId, controller.signal);
+
+            if (payload?.status === "completed" && payload.result) {
+              cleanup();
+              resolve(payload);
+              return;
+            }
+
+            if (payload?.status === "failed") {
+              cleanup();
+              reject(
+                new Error(
+                  payload.error || "Terjadi kesalahan saat memeriksa pesan."
+                )
+              );
+            }
+          } catch (pollError) {
+            if (settled) return;
+
+            if (
+              clientTimedOut &&
+              (!sseAvailable ||
+                (pollError instanceof Error && pollError.name === "AbortError"))
+            ) {
+              cleanup();
+              reject(pollError);
+              return;
+            }
+
+            console.warn("[api/analyze] result backup polling failed", {
+              jobId,
+              source: source || "backup_poll",
+              message:
+                pollError instanceof Error ? pollError.message : "unknown error",
+            });
+          } finally {
+            inFlight = false;
+          }
+        }
+
+        function armReportNotice(nextProgress) {
+          if (nextProgress.stage !== "report_generation") {
+            clearReportNotice();
+            return;
+          }
+
+          if (reportNoticeTimeoutRef.current) return;
+
+          reportNoticeTimeoutRef.current = window.setTimeout(() => {
+            setProgressState((currentProgress) => {
+              if (currentProgress?.stage !== "report_generation") {
+                return currentProgress;
+              }
+
+              return {
+                ...currentProgress,
+                isReportTakingLong: true,
+              };
+            });
+          }, REPORT_GENERATION_NOTICE_MS);
+        }
+
+        eventSource.onmessage = (messageEvent) => {
+          try {
+            const nextProgress = JSON.parse(messageEvent.data);
+            setProgressState(nextProgress);
+            armReportNotice(nextProgress);
+
+            if (
+              nextProgress.stage === "completed" ||
+              nextProgress.status === "completed"
+            ) {
+              eventSource?.close();
+              void resolveFromResult({ source: "sse_completed" });
+            }
+
+            if (
+              nextProgress.stage === "failed" ||
+              nextProgress.status === "failed"
+            ) {
+              eventSource?.close();
+              void resolveFromResult({ source: "sse_failed" });
+            }
+          } catch {
+            // Ignore malformed progress events; backup polling remains available.
+          }
+        };
+        eventSource.onerror = () => {
+          sseAvailable = false;
+          eventSource?.close();
+        };
+
+        backupPollId = window.setInterval(() => {
+          if (!settled) {
+            void resolveFromResult({ source: "backup_poll" });
+          }
+        }, RESULT_BACKUP_POLL_MS);
+      });
+
+      if (resultPayload?.status !== "completed" || !resultPayload.result) {
+        throw new DOMException("Request timeout", "AbortError");
+      }
+
+      setResult(resultPayload.result);
       window.setTimeout(() => {
         resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 120);
     } catch (caughtError) {
       if (caughtError instanceof Error && caughtError.name === "AbortError") {
+        if (activeJobId) {
+          console.info("[api/analyze] timeout recovery attempt", {
+            jobId: activeJobId,
+          });
+
+          try {
+            const recoveryPayload = await fetchAnalysisResult(activeJobId);
+
+            if (recoveryPayload?.status === "completed" && recoveryPayload.result) {
+              console.info("[api/analyze] final result recovery success", {
+                jobId: activeJobId,
+                status: recoveryPayload.status,
+              });
+              setResult(recoveryPayload.result);
+              window.setTimeout(() => {
+                resultRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              }, 120);
+              return;
+            }
+
+            if (recoveryPayload?.status === "failed") {
+              setError(
+                getFriendlyErrorMessage(
+                  new Error(
+                    recoveryPayload.error ||
+                      "Terjadi kesalahan saat memeriksa pesan."
+                  )
+                )
+              );
+              return;
+            }
+          } catch (recoveryError) {
+            console.warn("[api/analyze] timeout recovery failed", {
+              jobId: activeJobId,
+              message:
+                recoveryError instanceof Error
+                  ? recoveryError.message
+                  : "unknown error",
+            });
+          }
+        }
+
         setError("Koneksi AI sedang lambat. Coba lagi sebentar lagi.");
         return;
       }
@@ -245,6 +489,14 @@ export default function HomePage() {
       setError(getFriendlyErrorMessage(caughtError));
     } finally {
       window.clearTimeout(timeoutId);
+      eventSource?.close();
+      if (eventSourceRef.current === eventSource) {
+        eventSourceRef.current = null;
+      }
+      if (reportNoticeTimeoutRef.current) {
+        window.clearTimeout(reportNoticeTimeoutRef.current);
+        reportNoticeTimeoutRef.current = null;
+      }
       setIsLoading(false);
     }
   }
@@ -307,7 +559,7 @@ export default function HomePage() {
           />
         </section>
 
-        {isLoading ? <LoadingState /> : null}
+        {isLoading ? <ProgressiveLoading progressState={progressState} /> : null}
         {error ? <ErrorState message={error} /> : null}
 
         <div ref={resultRef}>

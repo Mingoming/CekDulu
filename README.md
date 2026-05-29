@@ -43,6 +43,12 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
   - tanda yang perlu dicek,
   - saran tindakan.
 - API route `/api/analyze` untuk membuat penjelasan AI.
+- Progressive Analysis Pipeline dengan endpoint job:
+  - `POST /api/analyze/start`,
+  - `GET /api/analyze/stream?id=<jobId>`,
+  - `GET /api/analyze/result?id=<jobId>`.
+- Progress analisis real-time melalui Server Sent Events (SSE).
+- In-memory job store dengan TTL cleanup 10 menit untuk demo Cloud Run single instance.
 - URL detection untuk mengenali input yang berisi link.
 - Article scraping untuk membaca halaman artikel dari URL.
 - Metadata extraction untuk mengambil:
@@ -65,6 +71,7 @@ CekDulu tidak menentukan kebenaran mutlak sebuah informasi. Aplikasi ini memberi
   - validasi ulang setiap redirect.
 - Fallback hasil dasar jika scraping artikel gagal.
 - Fallback hasil dasar jika analisis AI sedang tidak tersedia.
+- Quick AI baseline satu attempt dengan model `gemma-4-26b-a4b-it`; Primary AI `gemini-3-flash-preview` menjadi enrichment/upgrade.
 - Claim extraction sederhana untuk mengambil klaim utama dari input, OCR, atau hasil scraping.
 - Search query generation untuk membuat query pencarian singkat, spesifik, dan bebas kata emosional.
 - Web retrieval dengan Gemini Grounding with Google Search untuk mencari maksimal 5 sumber pembanding saat kasus masih ambigu.
@@ -162,17 +169,28 @@ CekDulu/
 2. Pada mode `Teks/Link`, pengguna menempel chat, berita, caption, atau link.
 3. Pada mode `Screenshot`, pengguna mengunggah gambar dan OCR membaca teks di browser.
 4. Teks hasil OCR masuk ke editor dan bisa diperbaiki pengguna.
-5. Aplikasi memvalidasi input sebelum dikirim ke API.
-6. Jika input berisi URL, sistem mencoba membaca halaman artikel.
-7. Sistem mengambil metadata artikel dan menganalisis domain awal serta domain akhir.
-8. Sistem mengambil klaim utama dan membuat query pencarian singkat berisi 5-12 kata.
-9. Heuristic analyzer menghitung skor risiko dari teks dan konteks artikel.
-10. Sistem mencari konteks semantic memory dari sumber yang pernah tersimpan di local vector store.
-11. Jika semantic memory cukup relevan, grounding dilewati dan konteks memory dipakai sebagai pembanding tambahan.
-12. Jika kasus masih ambigu, memory belum cukup relevan, dan grounding aktif, server memakai Gemini Grounding with Google Search untuk mencari sumber pembanding.
-13. Jika grounding sukses, sumber valid disimpan sebagai vector memory untuk request berikutnya.
-14. AI membuat ringkasan, klaim utama, perbandingan sumber, tanda yang perlu dicek, dan saran tindakan.
-15. Jika OCR, scraping, retrieval, embedding, vector memory, grounding, atau AI gagal, aplikasi menampilkan pesan ramah atau hasil pemeriksaan dasar sesuai kondisi.
+5. Aplikasi memvalidasi input sebelum membuat job analisis.
+6. Frontend memanggil `POST /api/analyze/start` untuk menerima `jobId`.
+7. Frontend membuka SSE ke `GET /api/analyze/stream?id=<jobId>` untuk menampilkan progres:
+   - membaca input,
+   - memeriksa tanda mencurigakan,
+   - membaca artikel atau tautan,
+   - membandingkan informasi,
+   - menyusun hasil analisis.
+8. Frontend melakukan polling ke `GET /api/analyze/result?id=<jobId>` sampai status selesai.
+9. Jika input berisi URL, sistem mencoba membaca halaman artikel.
+10. Sistem mengambil metadata artikel dan menganalisis domain awal serta domain akhir.
+11. Sistem mengambil klaim utama dan membuat query pencarian singkat berisi 5-12 kata.
+12. Heuristic analyzer menghitung skor risiko dari teks dan konteks artikel.
+13. Sistem mencari konteks semantic memory dari sumber yang pernah tersimpan di local vector store.
+14. Jika semantic memory cukup relevan, grounding dilewati dan konteks memory dipakai sebagai pembanding tambahan.
+15. Jika kasus masih ambigu, memory belum cukup relevan, dan grounding aktif, server memakai Gemini Grounding with Google Search untuk mencari sumber pembanding.
+16. Jika grounding sukses, sumber valid disimpan sebagai vector memory untuk request berikutnya.
+17. Quick AI baseline membuat hasil AI minimum memakai `gemma-4-26b-a4b-it` dengan prompt pendek berbasis heuristic, klaim utama, info domain ringkas, skor risiko, dan indikator terdeteksi.
+18. Primary AI `gemini-3-flash-preview` berjalan setelah Quick AI sebagai enrichment dengan prompt lengkap dan structured output schema.
+19. Jika Primary AI berhasil, hasil Primary dipakai sebagai upgrade. Jika Primary gagal tetapi Quick AI valid, hasil Quick tetap dipakai.
+20. Jika Quick AI dan Primary AI sama-sama gagal, aplikasi memakai template fallback heuristic yang ramah untuk pengguna.
+21. Jika OCR, scraping, retrieval, embedding, vector memory, grounding, atau AI gagal, aplikasi menampilkan pesan ramah atau hasil pemeriksaan dasar sesuai kondisi.
 
 ## Cara Instalasi
 
@@ -190,16 +208,21 @@ Salin file `.env.example` menjadi `.env.local`.
 GEMINI_API_KEY=isi_api_key_anda
 GEMINI_API_KEYS=key_cadangan_1,key_cadangan_2,key_cadangan_3
 GEMINI_MODEL=gemini-3-flash-preview
-AI_TIMEOUT_MS=9000
-AI_REQUEST_BUDGET_MS=14000
-AI_MAX_KEY_ATTEMPTS=2
+AI_MODEL=gemini-3-flash-preview
+AI_TIMEOUT_MS=12000
+AI_REQUEST_BUDGET_MS=13000
+AI_MAX_KEY_ATTEMPTS=1
 AI_MAX_OUTPUT_TOKENS=900
+AI_QUICK_FALLBACK_ENABLED=true
+AI_QUICK_MODEL=gemma-4-26b-a4b-it
+AI_QUICK_TIMEOUT_MS=8000
+AI_QUICK_MAX_OUTPUT_TOKENS=500
 AI_KEY_COOLDOWN_MS=120000
 AI_INVALID_KEY_COOLDOWN_MS=900000
 GEMINI_GROUNDING_MODEL=gemini-2.5-flash
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 ENABLE_VECTOR_MEMORY=false
-ENABLE_GROUNDING=true
+ENABLE_GROUNDING=false
 GROUNDING_TIMEOUT_MS=5000
 GROUNDING_MAX_KEY_ATTEMPTS=1
 GROUNDING_MIN_SCORE=35
@@ -210,17 +233,22 @@ Keterangan:
 
 - `GEMINI_API_KEY`: API key utama untuk memanggil model AI melalui endpoint OpenAI-compatible Gemini.
 - `GEMINI_API_KEYS`: daftar API key tambahan, dipisahkan dengan koma. Server memakai round-robin agar request tersebar ke semua key yang tersedia.
-- `GEMINI_MODEL`: nama model yang digunakan oleh API route.
-- `AI_TIMEOUT_MS`: batas waktu per percobaan AI utama dalam milidetik. Default `9000`.
-- `AI_REQUEST_BUDGET_MS`: batas total waktu AI utama dalam satu request. Default `14000` agar maksimal dua percobaan AI tetap cepat fallback.
-- `AI_MAX_KEY_ATTEMPTS`: jumlah maksimal API key yang dicoba dalam satu request AI. Default `2`; semua key tetap dipakai bergantian lewat round-robin antar-request.
+- `GEMINI_MODEL`: nama model kompatibilitas lama untuk Primary AI. Untuk ADR-001, samakan dengan `AI_MODEL`.
+- `AI_MODEL`: model Primary AI. Default/rekomendasi ADR-001 adalah `gemini-3-flash-preview`.
+- `AI_TIMEOUT_MS`: batas waktu per percobaan Primary AI dalam milidetik. Rekomendasi ADR-001 `12000`.
+- `AI_REQUEST_BUDGET_MS`: batas total waktu Primary AI dalam satu request. Rekomendasi ADR-001 `13000`.
+- `AI_MAX_KEY_ATTEMPTS`: jumlah maksimal API key yang dicoba dalam satu request Primary AI. Rekomendasi ADR-001 `1` agar tidak membuat retry agresif.
 - `AI_MAX_OUTPUT_TOKENS`: batas output AI utama. Default `900` agar JSON tetap cukup lengkap tanpa terlalu panjang.
+- `AI_QUICK_FALLBACK_ENABLED`: isi `false` untuk mematikan Quick AI baseline. Default aktif.
+- `AI_QUICK_MODEL`: model Quick AI baseline. Rekomendasi ADR-001 `gemma-4-26b-a4b-it`.
+- `AI_QUICK_TIMEOUT_MS`: batas waktu Quick AI baseline dalam milidetik. Rekomendasi ADR-001 `8000`.
+- `AI_QUICK_MAX_OUTPUT_TOKENS`: batas output Quick AI baseline. Rekomendasi ADR-001 `500` agar jawaban tetap ringkas.
 - `AI_KEY_COOLDOWN_MS`: durasi istirahat sementara untuk key yang gagal karena timeout, rate limit, atau error server. Default `120000`.
 - `AI_INVALID_KEY_COOLDOWN_MS`: durasi istirahat untuk key yang gagal karena auth/permission. Default `900000`.
 - `GEMINI_GROUNDING_MODEL`: nama model Gemini yang digunakan untuk grounding Google Search. Jika kosong, aplikasi memakai `GEMINI_MODEL`.
 - `GEMINI_EMBEDDING_MODEL`: nama model Gemini yang digunakan untuk embedding semantic memory.
 - `ENABLE_VECTOR_MEMORY`: isi `true` untuk mengaktifkan local JSON vector memory. Untuk demo deploy Cloud Run, gunakan `false`.
-- `ENABLE_GROUNDING`: isi `false` untuk mematikan grounding, misalnya saat local development.
+- `ENABLE_GROUNDING`: isi `false` untuk mematikan grounding. Rekomendasi ADR-001 untuk demo/kompetisi adalah `false`.
 - `GROUNDING_TIMEOUT_MS`: batas waktu grounding dalam milidetik. Default `5000`.
 - `GROUNDING_MAX_KEY_ATTEMPTS`: jumlah maksimal API key yang dicoba untuk grounding. Default `1` agar tidak membuang waktu saat beberapa key masih berada dalam project/quota pool yang sama.
 - `GROUNDING_MIN_SCORE`: skor minimum agar grounding dipanggil. Default `35`.
@@ -296,11 +324,17 @@ Rekomendasi env untuk demo:
 
 ```bash
 ENABLE_VECTOR_MEMORY=false
-ENABLE_GROUNDING=true
-AI_TIMEOUT_MS=9000
-AI_REQUEST_BUDGET_MS=14000
-AI_MAX_KEY_ATTEMPTS=2
+ENABLE_GROUNDING=false
+GEMINI_MODEL=gemini-3-flash-preview
+AI_MODEL=gemini-3-flash-preview
+AI_TIMEOUT_MS=12000
+AI_REQUEST_BUDGET_MS=13000
+AI_MAX_KEY_ATTEMPTS=1
 AI_MAX_OUTPUT_TOKENS=900
+AI_QUICK_FALLBACK_ENABLED=true
+AI_QUICK_MODEL=gemma-4-26b-a4b-it
+AI_QUICK_TIMEOUT_MS=8000
+AI_QUICK_MAX_OUTPUT_TOKENS=500
 AI_KEY_COOLDOWN_MS=120000
 AI_INVALID_KEY_COOLDOWN_MS=900000
 GROUNDING_TIMEOUT_MS=8000
@@ -326,8 +360,13 @@ Catatan penting: local JSON vector store di `data/vectors/sources.json` tidak pe
 - Grounding tidak selalu dipanggil. Sistem bisa melewati grounding jika dimatikan lewat env, semantic memory cukup relevan, URL berhasil dibaca dan risikonya rendah, skor heuristic di bawah `GROUNDING_MIN_SCORE`, atau skor heuristic di atas `GROUNDING_MAX_SCORE`.
 - Grounding terutama dipakai untuk kasus abu-abu saat heuristic belum cukup jelas dan memory belum punya konteks yang relevan.
 - Retrieval bisa gagal jika Gemini Grounding tidak tersedia, API key terkena limit, koneksi lambat, atau sumber yang relevan belum ditemukan.
+- Quick AI baseline hanya memakai konteks ringkas dan tidak membawa isi artikel penuh, retrieval memory panjang, atau prompt utama.
+- Quick AI baseline hanya mencoba satu request agar tidak memboroskan quota dan tidak memperpanjang waktu tunggu terlalu lama.
+- Arsitektur AI mengikuti `references/ADR-001-Quick-AI-Baseline-Architecture.md`: Quick AI adalah baseline, Primary AI adalah upgrade, dan template fallback adalah last resort.
 - Embedding atau vector store bisa gagal; jika terjadi, pipeline lama tetap berjalan tanpa memory retrieval.
 - Jika grounding tidak tersedia, UI menampilkan pesan ramah: `Sumber pembanding belum tersedia. Hasil analisis dasar tetap ditampilkan.`
+- Progressive Analysis Pipeline memakai in-memory `Map`, sehingga job progress bisa hilang jika instance Cloud Run restart.
+- In-memory job store cocok untuk demo single instance. Untuk multi-instance production, job store perlu dipindah ke storage bersama.
 - Multi-key fallback Gemini hanya efektif menambah kuota jika API key berasal dari project/quota pool yang berbeda.
 - Aplikasi tidak memakai database dan tidak menyimpan riwayat pemeriksaan.
 - Aplikasi memakai Gemini Embedding API dan local JSON vector store sederhana untuk semantic memory.

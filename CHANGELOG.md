@@ -2,6 +2,43 @@
 
 Changelog ini merangkum perubahan besar pada project CekDulu.
 
+## MVP 6B Lite / ADR-001
+
+Tahap implementasi `references/ADR-001-Quick-AI-Baseline-Architecture.md` untuk reliability AI baseline demo publik.
+
+Perubahan utama:
+
+- Mengubah arsitektur AI menjadi Quick AI baseline terlebih dahulu, lalu Primary AI enrichment.
+- Menetapkan Quick AI sebagai baseline dengan model `gemma-4-26b-a4b-it`.
+- Menjaga Primary AI sebagai upgrade dengan model `gemini-3-flash-preview`.
+- Quick AI memakai prompt pendek berbasis heuristic, klaim utama, info domain ringkas, skor risiko, dan indikator terdeteksi.
+- Quick AI tidak mengirim isi artikel penuh, retrieval memory panjang, grounding context panjang, atau prompt utama.
+- Quick AI hanya melakukan satu attempt dengan timeout dan output token limit terpisah.
+- Menambahkan env `AI_MODEL`, `AI_QUICK_MODEL`, `AI_QUICK_FALLBACK_ENABLED`, `AI_QUICK_TIMEOUT_MS`, dan `AI_QUICK_MAX_OUTPUT_TOKENS`.
+- Menjaga template fallback heuristic sebagai last resort jika Quick AI dan Primary AI sama-sama gagal.
+- Menambahkan metadata internal `aiMode` untuk membedakan `primary`, `quick_fallback`, dan `template_fallback`.
+- Menambahkan logging ringkas `quick_ai_started`, `quick_ai_succeeded`, `quick_ai_failed`, `quick_ai_unusable`, `primary_ai_started`, `primary_ai_succeeded`, `primary_ai_failed`, `quick_result_used`, `primary_result_used`, dan `template_fallback_used` tanpa raw user content atau API key.
+
+## MVP 6 Lite
+
+Tahap progressive analysis untuk membuat proses pemeriksaan terasa lebih transparan.
+
+Perubahan utama:
+
+- Menambahkan Progressive Analysis Pipeline berbasis job.
+- Menambahkan endpoint `POST /api/analyze/start` untuk membuat job analisis.
+- Menambahkan endpoint `GET /api/analyze/stream?id=<jobId>` untuk update progress melalui Server Sent Events (SSE).
+- Menambahkan endpoint `GET /api/analyze/result?id=<jobId>` untuk mengambil hasil akhir job.
+- Menambahkan in-memory job store berbasis `Map`.
+- Menambahkan TTL cleanup 10 menit agar job lama tidak menumpuk di memory.
+- Menambahkan komponen `ProgressiveLoading` dengan progress bar dan checklist tahap analisis.
+- Mengubah alur submit frontend agar:
+  - membuat job,
+  - subscribe progress SSE,
+  - polling hasil,
+  - menampilkan result card yang sama seperti alur sebelumnya.
+- Menambahkan logging stage transition dan job completion tanpa mencatat raw input user atau API key.
+
 ## MVP 1
 
 Tahap awal CekDulu sebagai aplikasi web satu halaman.
