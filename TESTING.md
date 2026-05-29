@@ -15,6 +15,10 @@ npm install
 ```bash
 GEMINI_API_KEY=isi_api_key_anda
 GEMINI_MODEL=gemini-3-flash-preview
+AI_TIMEOUT_MS=9000
+AI_REQUEST_BUDGET_MS=14000
+AI_MAX_KEY_ATTEMPTS=2
+AI_MAX_OUTPUT_TOKENS=900
 ```
 
 3. Jalankan aplikasi:
