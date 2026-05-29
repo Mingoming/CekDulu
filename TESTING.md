@@ -208,7 +208,7 @@ Gunakan DevTools, Postman, curl, atau client API lain.
 - [ ] Selama loading, textarea dan tombol disabled.
 - [ ] Loading state `Sedang memeriksa isi pesan...` terlihat.
 - [ ] Setelah selesai, loading hilang.
-- [ ] Jika request timeout, tampil pesan:
+- [ ] Jika request melewati batas waktu client 45 detik, tampil pesan:
 
 ```text
 Koneksi AI sedang lambat. Coba lagi sebentar lagi.

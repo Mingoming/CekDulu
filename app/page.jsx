@@ -15,7 +15,7 @@ import OcrLoadingState from "@/components/OcrLoadingState";
 import ResultCard from "@/components/ResultCard";
 
 const MAX_INPUT_LENGTH = 6000;
-const REQUEST_TIMEOUT_MS = 30000;
+const REQUEST_TIMEOUT_MS = 45000;
 const MAX_SCREENSHOT_SIZE = 5 * 1024 * 1024;
 const SUPPORTED_SCREENSHOT_TYPES = new Set([
   "image/jpeg",
